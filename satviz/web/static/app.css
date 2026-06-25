@@ -138,6 +138,18 @@ kbd { background: #0f1115; border: 1px solid #2a2e37; border-bottom-width: 2px; 
 .history-page { display: block; height: auto; }
 .history-main { padding: 1.5rem; }
 .back-link { margin-left: auto; color: var(--accent); text-decoration: none; }
+.history-controls { display: flex; gap: .5rem; align-items: center; margin-bottom: .8rem; }
+.history-controls input[type="search"] { flex: 1; max-width: 360px; padding: .5rem .7rem;
+    border-radius: 6px; border: 1px solid #2a2e37; background: #0f1115; color: var(--ink); }
+.clear-link { color: var(--muted); font-size: .85rem; }
+.tier-chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+.tier-chips .chip { text-decoration: none; color: var(--ink); background: #232733;
+    padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; border: 1px solid transparent; }
+.tier-chips .chip.on { border-color: var(--accent); color: var(--accent); }
+#history-map { height: 280px; border-radius: 10px; margin-bottom: 1.2rem; }
+.pager { display: flex; gap: 1rem; align-items: center; justify-content: center; margin: 1.4rem 0; }
+.pager a { color: var(--accent); text-decoration: none; }
+.pager .disabled { color: #3a4150; }
 .run-gallery { list-style: none; padding: 0; margin: 0; display: grid;
                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
 .run-gallery a { display: flex; flex-direction: column; gap: .35rem; text-decoration: none;

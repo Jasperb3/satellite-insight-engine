@@ -68,7 +68,7 @@ Presenters are thin frontends over this seam.
 | `storage.py` | Dated run folders, report writing, 30-day rolling purge |
 | `navigation.py` | Pure WASD/zoom coordinate math |
 | `engine.py` | `SatVizEngine` orchestration seam (returns `Report`); emits coarse progress stages via an optional `on_stage` callback and honours a cooperative `should_cancel` between stages (raising `AnalysisCancelled`) |
-| `application/` | Browser-facing `AnalysisService`: DTOs, viewport cache, run addressing, error normalisation, presentation filters (`pretty_kind`/`relative_age`/`is_stale`/`marker_icon`), and reverse-geocode; `jobs.py` runs snapshots on background threads (`JobManager`) for live progress + cancel |
+| `application/` | Browser-facing `AnalysisService`: DTOs, viewport cache, run addressing, error normalisation, presentation filters (`pretty_kind`/`relative_age`/`is_stale`/`marker_icon`), and reverse-geocode; `jobs.py` runs snapshots on background threads (`JobManager`) for live progress + cancel; `index.py` (`RunIndex`) is a SQLite cache of saved runs powering History search/pagination/map |
 | `web/` | FastAPI app: `app.py` factory, `routes/` (pages + api), Jinja `templates/`, Leaflet+HTMX `static/` |
 | `presenters/cli.py` | Terminal frontend |
 | `main.py` | Argparse entry point (`--gui` launches uvicorn) |
@@ -86,6 +86,13 @@ polls `GET /api/analyze/status/{job_id}` for `state`/`stage`, fetches the render
 `GET /api/analyze/result/{job_id}` when done, and can abort via `DELETE /api/analyze/{job_id}`.
 `GET /api/reverse` backs a pre-capture open-water warning. (The synchronous `POST /api/analyze`
 remains for back-compat but the GUI uses the job flow.)
+
+**History** (`/history`) is served from `RunIndex`, a SQLite cache (`OUTPUT_ROOT/index.db`)
+treated as a *derived* view over the per-run JSON files (still the source of truth). The
+service adds each new GUI run to the index live and `reconcile()`s it against the filesystem on
+startup — picking up CLI-created runs and dropping rows for purged folders. This backs
+paginated listing, name search, imagery-tier filtering, and the runs map without walking the
+output tree per request. The DB is gitignored with `output_images/`.
 
 ## Key Data Structures
 

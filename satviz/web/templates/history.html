@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Recent runs — Satellite Insight Engine</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="history-page">
@@ -12,7 +14,29 @@
     <a class="back-link" href="/">← Back to map</a>
   </header>
   <main class="history-main">
+    <form class="history-controls" method="get" action="/history">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search by place…" autocomplete="off">
+      {% if tier %}<input type="hidden" name="tier" value="{{ tier }}">{% endif %}
+      <button type="submit" class="secondary">Search</button>
+      {% if q or tier %}<a class="clear-link" href="/history">Clear</a>{% endif %}
+    </form>
+
+    {% if tiers %}
+      <div class="tier-chips">
+        <a class="chip {% if not tier %}on{% endif %}" href="/history{% if q %}?q={{ q }}{% endif %}">All</a>
+        {% for t in tiers %}
+          <a class="chip {% if tier == t %}on{% endif %}"
+             href="/history?tier={{ t }}{% if q %}&q={{ q }}{% endif %}">{{ t }}</a>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if points %}
+      <div id="history-map"></div>
+    {% endif %}
+
     {% if runs %}
+      <p class="muted small">{{ total }} run{{ '' if total == 1 else 's' }}{% if q or tier %} matching{% endif %} · page {{ page }} of {{ pages }}</p>
       <ul class="run-gallery">
         {% for run in runs %}
           <li>
@@ -24,9 +48,39 @@
           </li>
         {% endfor %}
       </ul>
+
+      {% if pages > 1 %}
+        <nav class="pager">
+          {% set qs = ('&q=' ~ q if q else '') ~ ('&tier=' ~ tier if tier else '') %}
+          {% if page > 1 %}<a href="/history?page={{ page - 1 }}{{ qs }}">← Prev</a>
+          {% else %}<span class="disabled">← Prev</span>{% endif %}
+          <span class="muted">{{ page }} / {{ pages }}</span>
+          {% if page < pages %}<a href="/history?page={{ page + 1 }}{{ qs }}">Next →</a>
+          {% else %}<span class="disabled">Next →</span>{% endif %}
+        </nav>
+      {% endif %}
     {% else %}
-      <p class="muted">No saved runs yet. Take a snapshot from the <a href="/">map</a>.</p>
+      <p class="muted">{% if q or tier %}No runs match that filter. <a href="/history">Clear</a>{% else %}No saved runs yet. Take a snapshot from the <a href="/">map</a>.{% endif %}</p>
     {% endif %}
   </main>
+
+  {% if points %}
+    <script id="run-points" type="application/json">{{ points|tojson }}</script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+      // E10: bird's-eye map of every run location; click a pin to open that run.
+      const pts = JSON.parse(document.getElementById("run-points").textContent);
+      const hmap = L.map("history-map");
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19, attribution: "© OpenStreetMap contributors",
+      }).addTo(hmap);
+      const group = L.featureGroup(pts.map((p) =>
+        L.marker([p.latitude, p.longitude]).bindPopup(
+          `<a href="/?run=${encodeURIComponent(p.run_id)}">${p.display_name}</a>`)
+      )).addTo(hmap);
+      hmap.fitBounds(group.getBounds().pad(0.2), { maxZoom: 12 });
+    </script>
+  {% endif %}
 </body>
 </html>
