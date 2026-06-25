@@ -20,7 +20,7 @@ VISION_MODEL = _get("VISION_MODEL", "minicpm-v4.5:q8_0")
 AGENT_MODEL = _get("AGENT_MODEL", "lfm2.5:latest")
 
 RETENTION_DAYS = int(_get("RETENTION_DAYS", "30"))
-DEFAULT_BUFFER = int(_get("DEFAULT_BUFFER", "2500"))
+DEFAULT_BUFFER = int(_get("DEFAULT_BUFFER", "1500"))
 
 OUTPUT_ROOT = _get("OUTPUT_ROOT", "output_images")
 

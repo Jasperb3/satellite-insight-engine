@@ -14,10 +14,13 @@ from satviz.models import Enrichment, ImageResult, VisionInsight
 _MAX_TOOL_ITERS = 4
 
 _AGENT_SYSTEM = (
-    "You are a geography research assistant. Using the web_search tool, find what is "
-    "notable or significant about the given location and corroborate the satellite "
-    "observations. Keep searches focused. When done, write 2-4 sentences of context. "
-    "Do not fabricate; rely on search results."
+    "You are a geography research assistant. The satellite observation you are given is a "
+    "machine vision *hypothesis* that may be wrong — do not simply repeat or rubber-stamp "
+    "it. Using the web_search tool, establish what the location actually is and what is "
+    "notable about it, then explicitly reconcile: confirm the parts of the vision "
+    "observation that match reality and correct the parts that do not (e.g. a misidentified "
+    "river, or a landmark too small to see at this zoom). Keep searches focused. When done, "
+    "write 2-4 sentences of grounded context. Do not fabricate; rely on search results."
 )
 
 

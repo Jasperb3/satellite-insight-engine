@@ -74,11 +74,22 @@ cp .env.example .env              # then edit .env with your GEE project id
 ```bash
 source .venv/bin/activate
 
-python main.py          # interactive CLI (default)
-python main.py --gui    # reserved for the future HTML GUI (not yet implemented)
+python main.py                       # interactive CLI (default)
+python main.py --gui                 # browser GUI on http://localhost:8000
+python main.py --gui --port 9000     # custom port
 ```
 
-Controls during a session: `W/A/S/D` move, `Z/X` zoom in/out, `Q` quit.
+**CLI** controls during a session: `W/A/S/D` move, `Z/X` zoom in/out, `Q` quit.
+
+**Browser GUI** (FastAPI + Leaflet + HTMX): an interactive map is the primary surface —
+**click anywhere to analyse**, pan/zoom to explore, and use the on-map arrows / `W A S D` /
+`Z X` keys to step. The satellite composite is overlaid on the map, POIs appear as clickable
+markers, the report renders in a side panel with clickable links and confidence bars, and a
+"Recent runs" list reopens past analyses. You can also start it directly with uvicorn:
+
+```bash
+uvicorn satviz.web.app:app --reload
+```
 
 ## Output & retention
 
@@ -121,10 +132,16 @@ satviz/
   report.py        # merge + Markdown rendering
   storage.py       # dated folders, report writing, rolling purge
   navigation.py    # WASD/zoom math
-  engine.py        # UI-agnostic orchestration seam
-  presenters/cli.py  # terminal frontend (+ run.html)
+  engine.py        # UI-agnostic orchestration seam (returns Report)
+  application/     # browser-facing service over the engine: DTOs, cache, error handling
+  web/             # FastAPI app: routes, Jinja templates, Leaflet + HTMX assets
+  presenters/cli.py  # terminal frontend
 main.py
 ```
+
+The browser layer is strictly separated: `web/` (FastAPI/HTMX/Leaflet) talks only to
+`application/` (the `AnalysisService`), which talks to `engine.py`. No web concerns leak
+into the engine, and the browser addresses runs by `run_id` rather than file paths.
 
 ## License
 

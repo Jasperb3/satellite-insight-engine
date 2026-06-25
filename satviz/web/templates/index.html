@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Satellite Insight Engine</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header>
+    <h1>🛰️ Satellite Insight Engine</h1>
+    <form id="search-form" hx-post="/api/search" hx-target="#report" hx-indicator="#loading">
+      <input type="text" name="place" placeholder="Search a place… (e.g. Stonehenge)" autocomplete="off">
+      <button type="submit">Analyse</button>
+    </form>
+  </header>
+
+  <main>
+    <section id="map-pane">
+      <div id="map"></div>
+      <div id="controls">
+        <div class="nav-grid">
+          <button data-command="w" title="North">↑</button>
+          <button data-command="a" title="West">←</button>
+          <button data-command="d" title="East">→</button>
+          <button data-command="s" title="South">↓</button>
+        </div>
+        <div class="zoom">
+          <button data-zoom="z" title="Zoom in">＋</button>
+          <button data-zoom="x" title="Zoom out">－</button>
+        </div>
+        <span id="status-line" class="muted">Click the map or search to begin.</span>
+      </div>
+    </section>
+
+    <aside id="panel">
+      <div id="loading" class="loading">Analysing… imagery → vision → enrichment</div>
+      <div id="report">
+        <p class="muted">No analysis yet. Search a place, or click anywhere on the map.</p>
+      </div>
+      <details id="history-wrap" open>
+        <summary>Recent runs</summary>
+        <div id="history" hx-get="/api/runs" hx-trigger="load, refreshRuns from:body">
+          {% include "partials/history.html" %}
+        </div>
+      </details>
+    </aside>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

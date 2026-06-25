@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 from datetime import datetime, timedelta
+from uuid import uuid4
 
 from satviz import config
 from satviz.models import Report
@@ -15,10 +16,42 @@ class Storage:
     def __init__(self, root: str | None = None, now: datetime | None = None):
         self.root = root or config.OUTPUT_ROOT
         stamp = now or datetime.now()
-        self.run_dir = os.path.join(
-            self.root, stamp.strftime("%Y-%m-%d"), stamp.strftime("%H%M%S")
-        )
+        day = stamp.strftime("%Y-%m-%d")
+        tod = stamp.strftime("%H%M%S")
+        base = os.path.join(self.root, day, tod)
+        # Disambiguate runs that start in the same second (e.g. rapid browser clicks).
+        suffix = ""
+        while os.path.exists(base + suffix):
+            suffix = "-" + uuid4().hex[:4]
+        self.run_dir = base + suffix
         os.makedirs(self.run_dir, exist_ok=True)
+        # URL-safe, reversible identifier: "<day>_<tod[suffix]>".
+        self.run_id = f"{day}_{tod}{suffix}"
+
+    @classmethod
+    def resolve_run_dir(cls, run_id: str, root: str | None = None) -> str:
+        """Map a run_id back to its directory without exposing the layout to callers."""
+        root = root or config.OUTPUT_ROOT
+        day, _, rest = run_id.partition("_")
+        return os.path.join(root, day, rest)
+
+    @staticmethod
+    def find_image(run_dir: str) -> str | None:
+        if not os.path.isdir(run_dir):
+            return None
+        for name in sorted(os.listdir(run_dir)):
+            if name.endswith(".jpg"):
+                return os.path.join(run_dir, name)
+        return None
+
+    @staticmethod
+    def find_report_json(run_dir: str) -> str | None:
+        if not os.path.isdir(run_dir):
+            return None
+        for name in sorted(os.listdir(run_dir)):
+            if name.endswith(".json"):
+                return os.path.join(run_dir, name)
+        return None
 
     def path_for(self, latitude: float, longitude: float, buffer: int) -> str:
         """Output path for a fetched image within this run's folder."""

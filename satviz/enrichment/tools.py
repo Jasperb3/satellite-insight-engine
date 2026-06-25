@@ -101,23 +101,39 @@ def wikipedia_nearby(latitude: float, longitude: float) -> dict:
 _POI_TAGS = ["aeroway", "harbour", "man_made", "leisure", "natural", "landuse", "amenity", "tourism"]
 
 
-def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500) -> list[dict]:
-    """List notable named OpenStreetMap features near the coordinates via Overpass.
+# Signage and generic markers add noise rather than insight; rank them last.
+_DEMOTED_KINDS = {"information", "guidepost", "artwork", "yes"}
+
+
+def _poi_rank(poi: dict) -> int:
+    """Lower sorts first. Substantive features rank above tourist signage."""
+    if poi["kind"] in _DEMOTED_KINDS:
+        return 2
+    if poi["tag"] == "tourism":
+        return 1
+    return 0
+
+
+def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
+                limit: int = 20) -> list[dict]:
+    """List notable named OpenStreetMap features near the coordinates via Overpass,
+    ranked so substantive features come before tourist signage.
 
     Args:
         latitude (float): Latitude in decimal degrees.
         longitude (float): Longitude in decimal degrees.
         radius_m (int): Search radius in metres.
+        limit (int): Maximum number of features to return.
 
     Returns:
-        list: {name, kind} for named features near the point.
+        list: {name, kind, lat, lon} for named features near the point.
     """
     selectors = "".join(
         f'node(around:{radius_m},{latitude},{longitude})["{tag}"]["name"];'
         f'way(around:{radius_m},{latitude},{longitude})["{tag}"]["name"];'
         for tag in _POI_TAGS
     )
-    query = f"[out:json][timeout:25];({selectors});out center 40;"
+    query = f"[out:json][timeout:25];({selectors});out center 60;"
     resp = requests.post(
         "https://overpass-api.de/api/interpreter", data={"data": query},
         headers=_HEADERS, timeout=30,
@@ -130,9 +146,17 @@ def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500) -> list
         if not name or name in seen:
             continue
         seen.add(name)
-        kind = next((tags[t] for t in _POI_TAGS if t in tags), "")
-        out.append({"name": name, "kind": kind})
-    return out
+        tag = next((t for t in _POI_TAGS if t in tags), "")
+        center = el.get("center", {})
+        out.append({
+            "name": name,
+            "tag": tag,
+            "kind": tags.get(tag, ""),
+            "lat": el.get("lat", center.get("lat")),
+            "lon": el.get("lon", center.get("lon")),
+        })
+    out.sort(key=_poi_rank)
+    return out[:limit]
 
 
 def weather_and_elevation(latitude: float, longitude: float) -> dict:

@@ -16,11 +16,12 @@ WASD/zoom.
 ```bash
 source .venv/bin/activate
 python main.py          # interactive CLI (default)
-python main.py --gui    # reserved seam for a future HTML GUI (prints "not implemented")
+python main.py --gui    # browser GUI (FastAPI + Leaflet) on http://localhost:8000
 pytest                  # test suite
 ```
 
-Controls: `W/A/S/D` move, `Z/X` zoom, `Q` quit.
+Controls: `W/A/S/D` move, `Z/X` zoom, `Q` quit (CLI); in the GUI the Leaflet map is primary
+(click-to-analyse, pan/zoom, plus arrow/WASD/ZX keys).
 
 ## Configuration & privacy
 
@@ -61,12 +62,19 @@ Presenters are thin frontends over this seam.
 | `report.py` | Merges vision + enrichment → `Report`; renders `report.md` |
 | `storage.py` | Dated run folders, report writing, 30-day rolling purge |
 | `navigation.py` | Pure WASD/zoom coordinate math |
-| `engine.py` | `SatVizEngine` orchestration seam |
-| `presenters/cli.py` | Terminal frontend + `run.html` for browser viewing |
-| `main.py` | Argparse entry point (`--gui` reserved) |
+| `engine.py` | `SatVizEngine` orchestration seam (returns `Report`) |
+| `application/` | Browser-facing `AnalysisService`: DTOs, viewport cache, run addressing, error normalisation |
+| `web/` | FastAPI app: `app.py` factory, `routes/` (pages + api), Jinja `templates/`, Leaflet+HTMX `static/` |
+| `presenters/cli.py` | Terminal frontend |
+| `main.py` | Argparse entry point (`--gui` launches uvicorn) |
 
-Data flow: `cli.py` → `engine.py` → `geocode`/`imagery` → `vision` → `enrichment` →
+Data flow (CLI): `cli.py` → `engine.py` → `geocode`/`imagery` → `vision` → `enrichment` →
 `report` → `storage`.
+
+Data flow (GUI): browser (Leaflet+HTMX) → `web/routes` → `application.AnalysisService` →
+`engine.py` → … → `Report` → DTO → report partial. **Strict layering:** `web/` talks only to
+`application/`, which talks only to the engine. No FastAPI/HTMX/Leaflet types in engine code;
+the browser addresses runs by `run_id`, never by file path (`/asset/{run_id}/image`).
 
 ## Key Data Structures
 
@@ -81,17 +89,20 @@ rest of the report still returns.
 Per session: `output_images/YYYY-MM-DD/HHMMSS/{lat:.4f}-{lon:.4f}-{buffer}m.{jpg,json}`,
 a `.report.md`, and `run.html`. Runs older than `RETENTION_DAYS` are purged at startup.
 
-## Future GUI
+## Browser GUI
 
-`satviz/presenters/web.py` is reserved for a browser/HTML GUI. It will consume the same
-`SatVizEngine.analyze_* -> Report` seam, so no core changes are needed to add it.
+Built as `satviz/web/` (FastAPI) over `satviz/application/` (the `AnalysisService`). It
+consumes the same `SatVizEngine.analyze_* -> Report` seam — the engine was unchanged when the
+GUI was added. Viewport results are cached (`application/cache.py`) so repeat viewports don't
+rerun the pipeline; the design leaves a clean path to async job handling.
 
 ## Python Environment
 
 Python 3.12, venv at `.venv/`. Dependencies pinned in `requirements.txt`
-(`earthengine-api`, `ollama`, `geopy`, `Pillow`, `requests`, `python-dotenv`, `pytest`).
+(`earthengine-api`, `ollama`, `geopy`, `Pillow`, `requests`, `python-dotenv`,
+`fastapi`, `uvicorn`, `jinja2`, `python-multipart`, `pytest`).
 
 ## Planning Docs
 
-`docs/PRD.md` and `docs/DESIGN_PLAN.md` (gitignored) capture the product requirements and
-the phased upgrade plan this architecture was built from.
+`docs/PRD.md`, `docs/DESIGN_PLAN.md`, and `docs/BROWSER_PLAN.md` (all gitignored) capture the
+product requirements and the phased plans this architecture was built from.

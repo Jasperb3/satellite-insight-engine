@@ -1,0 +1,91 @@
+{% if not result.ok %}
+  <div class="error error-{{ result.failure_kind }}">
+    <strong>
+      {% if result.failure_kind == 'not_found' %}Nothing found
+      {% elif result.failure_kind == 'analysis_failed' %}Analysis failed
+      {% else %}Backend unavailable{% endif %}
+    </strong>
+    <p>{{ result.error }}</p>
+  </div>
+{% else %}
+  {% set r = result.report %}
+  {% set loc = r.location %}
+  {% set v = r.vision %}
+  {% set e = r.enrichment %}
+  <article class="report">
+    <h2>{{ loc.display_name }}</h2>
+    <p class="meta">
+      {{ "%.4f"|format(loc.latitude) }}, {{ "%.4f"|format(loc.longitude) }}
+      · zoom {{ r.buffer }} m
+      {% if result.timing_ms %}· {{ result.timing_ms }} ms{% endif %}
+    </p>
+
+    <img class="sat-image" src="{{ run_data.image_url }}" alt="satellite image of {{ loc.display_name }}">
+
+    <h3>What the image shows</h3>
+    <p>{{ v.summary or "No summary produced." }}</p>
+    {% if v.land_cover %}
+      <div class="chips">
+        {% for c in v.land_cover %}<span class="chip">{{ c }}</span>{% endfor %}
+      </div>
+    {% endif %}
+    {% if v.features %}
+      <ul class="features">
+        {% for f in v.features %}
+          <li>
+            <span class="feat-name">{{ f.name }}</span>
+            {% if f.confidence %}
+              <span class="bar"><span class="bar-fill" style="width: {{ (f.confidence * 100)|round }}%"></span></span>
+              <span class="muted">{{ (f.confidence * 100)|round }}%</span>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    <h3>Context &amp; enrichment</h3>
+    {% if e.summary %}<p>{{ e.summary }}</p>{% endif %}
+    {% if e.wikipedia and e.wikipedia.title %}
+      <p>
+        <strong>
+          {% if e.wikipedia.url %}<a href="{{ e.wikipedia.url }}" target="_blank" rel="noopener">{{ e.wikipedia.title }}</a>
+          {% else %}{{ e.wikipedia.title }}{% endif %}
+        </strong>
+        — {{ e.wikipedia.extract }}
+      </p>
+    {% endif %}
+
+    {% if e.pois %}
+      <h4>Nearby map features</h4>
+      <ul class="pois">
+        {% for p in e.pois %}
+          <li {% if p.lat and p.lon %}class="poi" data-lat="{{ p.lat }}" data-lon="{{ p.lon }}"{% endif %}>
+            {{ p.name }}{% if p.kind %} <span class="muted">({{ p.kind }})</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if e.elevation_m is not none or e.weather %}
+      <p class="env">
+        {% if e.elevation_m is not none %}⛰ {{ e.elevation_m|round|int }} m{% endif %}
+        {% if e.weather and e.weather.temperature is not none %} · 🌡 {{ e.weather.temperature }}°C{% endif %}
+      </p>
+    {% endif %}
+
+    {% if e.web %}
+      <h4>From the web</h4>
+      <ul class="weblinks">
+        {% for w in e.web[:5] %}
+          <li><a href="{{ w.url }}" target="_blank" rel="noopener">{{ w.title or w.url }}</a></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if e.errors %}
+      <p class="muted small">Some sources were unavailable: {{ e.errors|join('; ') }}</p>
+    {% endif %}
+  </article>
+
+  <script id="run-data" type="application/json">{{ run_data|tojson }}</script>
+{% endif %}
