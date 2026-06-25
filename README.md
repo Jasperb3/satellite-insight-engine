@@ -5,6 +5,12 @@ a structured + narrative reading of the image from a local vision model, corrobo
 live facts from Wikipedia, OpenStreetMap, weather/elevation APIs, and the web. Navigate the
 surrounding area with WASD/zoom.
 
+![Satellite Insight Engine browser GUI](assets/screenshot.png)
+
+*The browser GUI: a Leaflet map with the satellite composite overlaid, and a side panel with
+the structured reading, confidence bars, enrichment that reconciles the vision model against
+ground truth, and clickable sources.*
+
 ```
 Enter a location to analyze: Eiffel Tower
 Location: Avenue Gustave Eiffel, Paris, France
