@@ -58,3 +58,33 @@ def test_safe_returns_value_on_success():
     enrichment = Enrichment()
     assert orchestrator._safe(enrichment, "wikipedia", lambda: {"ok": 1}) == {"ok": 1}
     assert enrichment.errors == []
+
+
+def test_safe_error_strips_request_url_and_coords():
+    enrichment = Enrichment()
+
+    def boom():
+        raise RuntimeError(
+            "503 Server Error: Service Unavailable for url: "
+            "https://eonet.gsfc.nasa.gov/api/v3/events?bbox=1,2,3,4"
+        )
+
+    orchestrator._safe(enrichment, "events", boom)
+    recorded = enrichment.errors[0]
+    assert "http" not in recorded and "bbox" not in recorded
+    assert recorded == "events: 503 Server Error: Service Unavailable"
+
+
+def test_area_history_strips_section_headers(monkeypatch):
+    payload = {"query": {"pages": {"1": {
+        "extract": "== History == Built in 1925. == Architecture == It is tall."
+    }}}}
+
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self): return payload
+
+    monkeypatch.setattr(tools.requests, "get", lambda *a, **k: _Resp())
+    result = tools.area_history("Some Hotel")
+    assert "==" not in result
+    assert result == "Built in 1925. It is tall."

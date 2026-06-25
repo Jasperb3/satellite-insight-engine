@@ -90,13 +90,19 @@ python main.py --gui --port 9000     # custom port
 **Browser GUI** (FastAPI + Leaflet + HTMX): pan/zoom the map freely (instant), then press
 **📸 Snapshot** to analyse the framed view — the capture area is derived from what's visible
 (zoom in for sharper, narrower; zoom out for wider regional context). Arrows / `W A S D` pan,
-native zoom + pinch zoom, `Enter` snapshots. The report renders in a side panel: an imagery
-**provenance badge** (which satellite tier + resolution), a **weather bar**, the AI reading,
-nearby POIs (click to fly in, then **Reset view**), recent **news**, **history**, active
-**natural events**, and clickable sources. **🕘 History** (top bar) opens past runs in a new
-tab. Imagery is **tiered and always-returns**: Sentinel-2 (10 m) up close, NASA GIBS MODIS for
-wide regional views, and a report even where no imagery exists. You can also start it with
-uvicorn:
+native zoom + pinch zoom, `Enter` snapshots; the **⌨ help** button lists shortcuts. The
+snapshot runs as a background job with a **live per-stage progress** panel
+(imagery → vision → enrichment → report) and a **✕ Cancel** button. The report renders in a
+side panel: an imagery **provenance badge** (satellite tier + resolution, plus a relative age
+and a *stale* warning past 90 days), a **weather bar**, the AI reading, nearby POIs (click to
+fly in, then **Reset view**), recent **news**, **history**, active **natural events**, and
+clickable sources. The captured image can be shown as a **map overlay** at its true bounds, or
+opened **fullscreen** by clicking it; POIs appear as **category-coded pins**. Other touches:
+**🔗 Copy link** to a saved run, **🎲 Surprise** (jump to a random famous place and analyse),
+an open-water warning before remote captures, and the map restores your **last position**.
+**🕘 History** (top bar) opens past runs in a new tab. Imagery is **tiered and always-returns**:
+Sentinel-2 (10 m) up close, NASA GIBS MODIS for wide regional views, and a report even where no
+imagery exists. You can also start it with uvicorn:
 
 ```bash
 uvicorn satviz.web.app:app --reload
@@ -143,8 +149,8 @@ satviz/
   report.py        # merge + Markdown rendering
   storage.py       # dated folders, report writing, rolling purge
   navigation.py    # WASD/zoom math
-  engine.py        # UI-agnostic orchestration seam (returns Report)
-  application/     # browser-facing service over the engine: DTOs, cache, error handling
+  engine.py        # UI-agnostic orchestration seam (returns Report; emits progress stages)
+  application/     # browser-facing service over the engine: DTOs, cache, jobs, error handling
   web/             # FastAPI app: routes, Jinja templates, Leaflet + HTMX assets
   presenters/cli.py  # terminal frontend
 main.py

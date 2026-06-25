@@ -4,22 +4,66 @@
 
 let map;
 let priorView = null;  // framing to return to after a POI fly-in
+let imageOverlay = null;  // current captured-image overlay (E4)
+let currentJobId = null;  // in-flight analysis job (E1/E2)
+let pollTimer = null;
+const POLL_MS = 1200;
+const STAGE_ORDER = ["imagery", "vision", "enrichment", "report"];
 const markerLayer = L.layerGroup();
+
+// Geographic bounds of the analysed square: buffer_m on each side of the centre (E4).
+function viewportBounds(vp) {
+  const dLat = vp.buffer_m / 111320;
+  const dLon = vp.buffer_m / (111320 * Math.cos((vp.latitude * Math.PI) / 180));
+  return [[vp.latitude - dLat, vp.longitude - dLon], [vp.latitude + dLat, vp.longitude + dLon]];
+}
+
+// [lat, lng, zoom] for the 🎲 Surprise button (E7).
+const SURPRISE_PLACES = [
+  [29.9792, 31.1342, 16],   // Pyramids of Giza
+  [48.8584, 2.2945, 16],    // Eiffel Tower
+  [27.1751, 78.0421, 17],   // Taj Mahal
+  [-13.1631, -72.5450, 16], // Machu Picchu
+  [41.8902, 12.4922, 17],   // Colosseum
+  [-33.8568, 151.2153, 17], // Sydney Opera House
+  [37.8267, -122.4233, 15], // Alcatraz Island
+  [51.1789, -1.8262, 17],   // Stonehenge
+  [40.4319, 116.5704, 15],  // Great Wall (Mutianyu)
+  [-22.9519, -43.2105, 16], // Christ the Redeemer
+  [64.1466, -21.9426, 14],  // Reykjavík
+  [25.1972, 55.2744, 16],   // Burj Khalifa
+];
 
 function resetView() {
   if (!priorView) return;
   map.flyTo(priorView.center, priorView.zoom, { duration: 0.8 });
+  // flyTo fires a layout change before tiles settle; force a re-fetch when it lands.
+  map.once("moveend", () => map.invalidateSize());
   document.getElementById("reset-view").classList.add("hidden");
 }
 
+// Restore the last centre/zoom so returning users don't snap back to London (E16).
+function savedView() {
+  try {
+    const v = JSON.parse(localStorage.getItem("satviz:view"));
+    if (v && Number.isFinite(v.lat) && Number.isFinite(v.lng) && Number.isFinite(v.zoom)) return v;
+  } catch { /* ignore */ }
+  return null;
+}
+
 function initMap() {
-  map = L.map("map").setView([51.5, -0.12], 13);
+  const start = savedView();
+  map = L.map("map").setView(start ? [start.lat, start.lng] : [51.5, -0.12], start ? start.zoom : 13);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: "© OpenStreetMap contributors",
   }).addTo(map);
   markerLayer.addTo(map);
   map.on("move zoom", updateReadout);
+  map.on("moveend zoomend", () => {
+    const c = map.getCenter();
+    localStorage.setItem("satviz:view", JSON.stringify({ lat: c.lat, lng: c.lng, zoom: map.getZoom() }));
+  });
   updateReadout();
 }
 
@@ -48,20 +92,75 @@ function setLoading(on) {
   document.getElementById("snapshot").textContent = on ? "📸 Capturing…" : "📸 Snapshot";
 }
 
+// Highlight the active stage in the loading panel (E1).
+function setStage(stage) {
+  const idx = STAGE_ORDER.indexOf(stage);
+  document.querySelectorAll("#loading .stages li").forEach((li) => {
+    const i = STAGE_ORDER.indexOf(li.dataset.stage);
+    li.classList.toggle("done", idx >= 0 && i < idx);
+    li.classList.toggle("active", i === idx);
+  });
+}
+
+function reportError(title, detail) {
+  document.getElementById("report").innerHTML =
+    `<div class="error"><strong>${title}</strong><p>${detail}</p></div>`;
+}
+
 async function snapshot() {
   const c = map.getCenter();
+  // Warn before committing ~2 minutes to a point that reverse-geocodes to open water (E12).
+  try {
+    const r = await fetch(`/api/reverse?latitude=${c.lat}&longitude=${c.lng}`);
+    if (r.ok) {
+      const info = await r.json();
+      if (!info.located &&
+          !confirm("This looks like open water or a remote area with little to analyse. Capture anyway?")) {
+        return;
+      }
+    }
+  } catch { /* reverse check is best-effort; proceed if it fails */ }
+
   setLoading(true);
+  setStage("imagery");
   try {
     const body = new URLSearchParams({ latitude: c.lat, longitude: c.lng, buffer_m: currentBuffer() });
-    const resp = await fetch("/api/analyze", { method: "POST", body });
-    document.getElementById("report").innerHTML = await resp.text();
-    applyMarkers();
+    const resp = await fetch("/api/analyze/start", { method: "POST", body });
+    const { job_id } = await resp.json();
+    currentJobId = job_id;
+    pollJob(job_id);
   } catch (err) {
-    document.getElementById("report").innerHTML =
-      `<div class="error"><strong>Request failed</strong><p>${err}</p></div>`;
-  } finally {
+    reportError("Request failed", err);
     setLoading(false);
   }
+}
+
+// Poll a running job; update stages, then render the result / cancellation / error (E1/E2).
+async function pollJob(jobId) {
+  if (currentJobId !== jobId) return;  // cancelled or superseded
+  let status;
+  try {
+    status = await (await fetch(`/api/analyze/status/${jobId}`)).json();
+  } catch {
+    pollTimer = setTimeout(() => pollJob(jobId), POLL_MS);  // transient; retry
+    return;
+  }
+  setStage(status.stage);
+  if (status.state === "running") {
+    pollTimer = setTimeout(() => pollJob(jobId), POLL_MS);
+    return;
+  }
+  if (status.state === "done") {
+    const html = await (await fetch(`/api/analyze/result/${jobId}`)).text();
+    document.getElementById("report").innerHTML = html;
+    applyMarkers();
+  } else if (status.state === "cancelled") {
+    reportError("Cancelled", "The capture was cancelled.");
+  } else {
+    reportError("Analysis failed", status.error || "Unknown error.");
+  }
+  currentJobId = null;
+  setLoading(false);
 }
 
 async function loadRun(runId) {
@@ -70,6 +169,9 @@ async function loadRun(runId) {
     const resp = await fetch(`/api/run/${encodeURIComponent(runId)}`);
     document.getElementById("report").innerHTML = await resp.text();
     applyMarkers({ recenter: true });
+  } catch (err) {
+    document.getElementById("report").innerHTML =
+      `<div class="error"><strong>Could not load run</strong><p>${err}</p></div>`;
   } finally {
     setLoading(false);
   }
@@ -81,6 +183,10 @@ async function flyTo(place) {
   if (!resp.ok) {
     const status = document.getElementById("status-line");
     if (status) status.textContent = `Could not find "${place}".`;
+    const input = document.getElementById("place");
+    input.classList.remove("shake");
+    void input.offsetWidth;  // restart the animation
+    input.classList.add("shake");
     return;
   }
   const data = await resp.json();
@@ -96,21 +202,55 @@ function applyMarkers({ recenter = false } = {}) {
   const vp = data.viewport;
   if (!vp || vp.latitude == null) return;
 
-  if (recenter) map.setView([vp.latitude, vp.longitude], map.getZoom());
+  if (recenter) {
+    // Reconstruct the snapshot's framing: buffer_m is half the analysed square's side,
+    // so a 2*buffer bounds gives back the zoom currentBuffer() would have produced.
+    let zoom = map.getZoom();
+    if (vp.buffer_m) {
+      const bounds = L.latLng(vp.latitude, vp.longitude).toBounds(vp.buffer_m * 2);
+      zoom = map.getBoundsZoom(bounds);
+    }
+    map.setView([vp.latitude, vp.longitude], zoom);
+  }
 
   markerLayer.clearLayers();
   L.circleMarker([vp.latitude, vp.longitude], { radius: 6, color: "#e63946", weight: 2, fillOpacity: 0.6 })
     .bindPopup("Snapshot centre")
     .addTo(markerLayer);
   (data.markers || []).forEach((m) => {
-    L.circleMarker([m.lat, m.lon], { radius: 4, color: "#1d3557", weight: 1, fillOpacity: 0.7 })
+    // Emoji pin per POI category (E14); falls back to a generic marker if no icon.
+    const icon = L.divIcon({ className: "poi-pin", html: m.icon || "📍",
+                             iconSize: [22, 22], iconAnchor: [11, 11] });
+    L.marker([m.lat, m.lon], { icon })
       .bindPopup(`<strong>${m.name}</strong>${m.kind ? `<br><em>${m.kind}</em>` : ""}`)
       .addTo(markerLayer);
   });
+
+  // Captured-image overlay at its true geographic bounds (E4).
+  if (imageOverlay) { map.removeLayer(imageOverlay); imageOverlay = null; }
+  const toggle = document.getElementById("toggle-overlay");
+  if (data.image_url) {
+    imageOverlay = L.imageOverlay(data.image_url, viewportBounds(vp), { opacity: 0.65 }).addTo(map);
+    toggle.classList.remove("hidden");
+    toggle.classList.add("active");
+  } else {
+    toggle.classList.add("hidden");
+  }
 }
 
 function wireControls() {
   document.getElementById("snapshot").addEventListener("click", snapshot);
+
+  // ✕ Cancel an in-flight analysis (E2): stop polling and tell the server to abort.
+  document.getElementById("cancel-snapshot").addEventListener("click", () => {
+    if (!currentJobId) return;
+    const id = currentJobId;
+    currentJobId = null;          // stops the poll loop
+    clearTimeout(pollTimer);
+    fetch(`/api/analyze/${id}`, { method: "DELETE" }).catch(() => {});
+    reportError("Cancelled", "The capture was cancelled.");
+    setLoading(false);
+  });
 
   document.getElementById("search-form").addEventListener("submit", (ev) => {
     ev.preventDefault();
@@ -133,8 +273,44 @@ function wireControls() {
   });
   document.getElementById("reset-view").addEventListener("click", resetView);
 
+  // 🛰 Toggle the captured-image overlay on the map (E4).
+  document.getElementById("toggle-overlay").addEventListener("click", (ev) => {
+    if (!imageOverlay) return;
+    const showing = map.hasLayer(imageOverlay);
+    if (showing) map.removeLayer(imageOverlay); else imageOverlay.addTo(map);
+    ev.currentTarget.classList.toggle("active", !showing);
+  });
+
+  // 🎲 Surprise: fly to a random famous place and analyse it (E7).
+  document.getElementById("surprise-btn").addEventListener("click", () => {
+    if (document.body.classList.contains("busy")) return;
+    const [lat, lng, zoom] = SURPRISE_PLACES[Math.floor(Math.random() * SURPRISE_PLACES.length)];
+    map.once("moveend", snapshot);
+    map.flyTo([lat, lng], zoom, { duration: 0.8 });
+  });
+
+  // ⌨ Keyboard-shortcut help modal (E11).
+  const helpModal = document.getElementById("help-modal");
+  document.getElementById("help-btn").addEventListener("click", () => helpModal.classList.remove("hidden"));
+  helpModal.addEventListener("click", (ev) => {
+    if (ev.target === helpModal || ev.target.closest(".modal-close")) helpModal.classList.add("hidden");
+  });
+
+  // 🔍 Satellite-image lightbox (E9): click the image to view it fullscreen.
+  const lightbox = document.getElementById("lightbox");
+  document.body.addEventListener("click", (ev) => {
+    const img = ev.target.closest(".sat-image");
+    if (img) { lightbox.querySelector("img").src = img.src; lightbox.classList.remove("hidden"); }
+  });
+  lightbox.addEventListener("click", () => lightbox.classList.add("hidden"));
+
   // Keyboard: WASD pan, Z/X zoom (map only), Enter = snapshot. Ignore while typing.
   document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      document.getElementById("help-modal").classList.add("hidden");
+      document.getElementById("lightbox").classList.add("hidden");
+      return;
+    }
     if (ev.target.tagName === "INPUT") return;
     const size = map.getSize();
     const key = ev.key.toLowerCase();
@@ -144,7 +320,19 @@ function wireControls() {
     else if (key === "d") map.panBy([size.x * 0.3, 0]);
     else if (key === "z") map.zoomIn();
     else if (key === "x") map.zoomOut();
-    else if (key === "enter") snapshot();
+    else if (key === "enter" && !document.body.classList.contains("busy")) snapshot();
+  });
+
+  // Copy a shareable deep-link (?run=<id>) for the current report. Delegated because the
+  // report partial is swapped in after each snapshot/run load.
+  document.body.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".copy-link");
+    if (!btn) return;
+    const url = `${location.origin}/?run=${encodeURIComponent(btn.dataset.runId)}`;
+    navigator.clipboard.writeText(url).then(() => {
+      btn.textContent = "✓ Copied";
+      setTimeout(() => { btn.textContent = "🔗 Copy link"; }, 1500);
+    });
   });
 
   // POI focus: remember the framing, then smoothly fly in so it's actually visible.

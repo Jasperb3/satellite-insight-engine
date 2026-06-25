@@ -67,8 +67,8 @@ Presenters are thin frontends over this seam.
 | `report.py` | Merges vision + enrichment → `Report`; renders `report.md` |
 | `storage.py` | Dated run folders, report writing, 30-day rolling purge |
 | `navigation.py` | Pure WASD/zoom coordinate math |
-| `engine.py` | `SatVizEngine` orchestration seam (returns `Report`) |
-| `application/` | Browser-facing `AnalysisService`: DTOs, viewport cache, run addressing, error normalisation |
+| `engine.py` | `SatVizEngine` orchestration seam (returns `Report`); emits coarse progress stages via an optional `on_stage` callback and honours a cooperative `should_cancel` between stages (raising `AnalysisCancelled`) |
+| `application/` | Browser-facing `AnalysisService`: DTOs, viewport cache, run addressing, error normalisation, presentation filters (`pretty_kind`/`relative_age`/`is_stale`/`marker_icon`), and reverse-geocode; `jobs.py` runs snapshots on background threads (`JobManager`) for live progress + cancel |
 | `web/` | FastAPI app: `app.py` factory, `routes/` (pages + api), Jinja `templates/`, Leaflet+HTMX `static/` |
 | `presenters/cli.py` | Terminal frontend |
 | `main.py` | Argparse entry point (`--gui` launches uvicorn) |
@@ -80,6 +80,12 @@ Data flow (GUI): browser (Leaflet+HTMX) → `web/routes` → `application.Analys
 `engine.py` → … → `Report` → DTO → report partial. **Strict layering:** `web/` talks only to
 `application/`, which talks only to the engine. No FastAPI/HTMX/Leaflet types in engine code;
 the browser addresses runs by `run_id`, never by file path (`/asset/{run_id}/image`).
+
+A snapshot is a **background job**: `POST /api/analyze/start` returns a `job_id`; the client
+polls `GET /api/analyze/status/{job_id}` for `state`/`stage`, fetches the rendered partial from
+`GET /api/analyze/result/{job_id}` when done, and can abort via `DELETE /api/analyze/{job_id}`.
+`GET /api/reverse` backs a pre-capture open-water warning. (The synchronous `POST /api/analyze`
+remains for back-compat but the GUI uses the job flow.)
 
 ## Key Data Structures
 

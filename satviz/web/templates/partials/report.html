@@ -14,7 +14,13 @@
   {% set e = r.enrichment %}
   {% set w = e.weather or {} %}
   <article class="report">
-    <h2>{{ loc.display_name }}</h2>
+    <div class="report-head">
+      <h2>{{ loc.display_name }}</h2>
+      {% if result.run_id %}
+        <button type="button" class="copy-link secondary" data-run-id="{{ result.run_id }}"
+                title="Copy a link to this run">🔗 Copy link</button>
+      {% endif %}
+    </div>
     <p class="meta">
       {{ "%.4f"|format(loc.latitude) }}, {{ "%.4f"|format(loc.longitude) }}
       · zoom {{ r.buffer }} m
@@ -22,14 +28,16 @@
     </p>
 
     {% if r.imagery_tier %}
+    {% set age = r.imagery_date|relative_age %}
     <div class="provenance tier-{{ r.imagery_tier }}">
       {% if r.imagery_tier == 'none' %}
         🛰 No satellite imagery available for this view
       {% elif r.imagery_tier == 'regional' %}
-        🌍 Regional view · {{ r.imagery_source }} ~{{ r.resolution_m|int }} m{% if r.imagery_date %} · {{ r.imagery_date }}{% endif %} · zoom in for detail
+        🌍 Regional view · {{ r.imagery_source }} ~{{ r.resolution_m|int }} m{% if r.imagery_date %} · {{ r.imagery_date }}{% if age %} ({{ age }}){% endif %}{% endif %} · zoom in for detail
       {% else %}
-        🛰 {{ r.imagery_source }} · {{ r.resolution_m|int }} m{% if r.imagery_date %} · {{ r.imagery_date }}{% endif %}
+        🛰 {{ r.imagery_source }} · {{ r.resolution_m|int }} m{% if r.imagery_date %} · {{ r.imagery_date }}{% if age %} ({{ age }}){% endif %}{% endif %}
       {% endif %}
+      {% if r.imagery_date|is_stale %}<span class="stale-badge" title="Imagery is over 90 days old">⚠ stale</span>{% endif %}
     </div>
     {% endif %}
 
@@ -111,7 +119,7 @@
       <ul class="pois">
         {% for p in e.pois %}
           <li {% if p.lat and p.lon %}class="poi" data-lat="{{ p.lat }}" data-lon="{{ p.lon }}"{% endif %}>
-            {{ p.name }}{% if p.kind %} <span class="muted">({{ p.kind }})</span>{% endif %}
+            {{ p.name }}{% if p.kind %} <span class="muted">({{ p.kind|pretty_kind }})</span>{% endif %}
           </li>
         {% endfor %}
       </ul>
