@@ -1,0 +1,7 @@
+earthengine-api==1.7.32
+ollama==0.6.2
+geopy==2.4.1
+pillow==12.2.0
+requests==2.34.2
+python-dotenv==1.2.2
+pytest==9.1.1

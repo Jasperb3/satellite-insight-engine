@@ -1,0 +1,17 @@
+# Secrets & config
+.env
+
+# Planning docs (kept local)
+docs/
+
+# Runtime output
+output_images/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Stray sample images
+image1.png
+image2.png

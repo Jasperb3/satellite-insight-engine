@@ -1,0 +1,97 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+**Satellite Insight Engine.** A user enters a place name; the app fetches satellite imagery
+from Google Earth Engine, reads it with a local Ollama vision model, then enriches that
+reading with live facts from Wikipedia, OpenStreetMap, weather/elevation APIs, and (when a
+key is present) hosted web search via a small tool-using agent model. The merged result is a
+`Report` saved as image + JSON + Markdown. Users navigate the surrounding area with
+WASD/zoom.
+
+## Running
+
+```bash
+source .venv/bin/activate
+python main.py          # interactive CLI (default)
+python main.py --gui    # reserved seam for a future HTML GUI (prints "not implemented")
+pytest                  # test suite
+```
+
+Controls: `W/A/S/D` move, `Z/X` zoom, `Q` quit.
+
+## Configuration & privacy
+
+All identifiers and tunables live in a **gitignored `.env`** (see `.env.example`), loaded by
+`satviz/config.py`. There are **no personal identifiers in source** — keep it that way.
+Required: `GEE_PROJECT`. Optional: `OLLAMA_API_KEY` (enables hosted web search; otherwise
+free fallbacks are used). `.gitignore` also excludes `.venv/`, `output_images/`, and the
+local planning `docs/`.
+
+## External Services
+
+- **Google Earth Engine** (`ee`): requires a one-time `earthengine authenticate` and a GEE
+  project (from `GEE_PROJECT`). `satviz/imagery.py` initialises lazily. Sentinel-2
+  (`COPERNICUS/S2_HARMONIZED`) confirms recent cloud-free coverage; the RGB composite comes
+  from Landsat 8 TOA (`LANDSAT/LC08/C02/T1_TOA`).
+- **Ollama**: `minicpm-v4.5:q8_0` (vision) and `lfm2.5` (enrichment agent) must be pulled.
+- **Nominatim (OSM)**: forward + reverse geocoding (`satviz/geocode.py`), user agent from
+  `NOMINATIM_AGENT`.
+- **Enrichment APIs** (`satviz/enrichment/tools.py`): Wikipedia REST/geosearch, Overpass
+  (POIs), Open-Meteo (weather + elevation), and Ollama hosted web search with a Wikipedia
+  free fallback.
+
+## Architecture
+
+The codebase is the `satviz/` package built around a **UI-agnostic engine**.
+`SatVizEngine.analyze_*` (in `engine.py`) orchestrates geocode → imagery → vision →
+enrichment → report and **returns a `Report`** — it does no printing and opens no windows.
+Presenters are thin frontends over this seam.
+
+| Module | Role |
+|---|---|
+| `config.py` | Loads `.env`; single source of identifiers/tunables |
+| `models.py` | Dataclasses: `Location`, `ImageResult`, `VisionInsight`, `Enrichment`, `Report` |
+| `geocode.py` | Nominatim forward + reverse geocoding |
+| `imagery.py` | GEE: one `_composite_and_export(...)` helper + place/coordinate wrappers |
+| `vision.py` | `minicpm-v4.5` — structured JSON + narrative reading → `VisionInsight` |
+| `enrichment/` | `lfm2.5` tool loop + Wikipedia/OSM/Open-Meteo/web tools → `Enrichment` |
+| `report.py` | Merges vision + enrichment → `Report`; renders `report.md` |
+| `storage.py` | Dated run folders, report writing, 30-day rolling purge |
+| `navigation.py` | Pure WASD/zoom coordinate math |
+| `engine.py` | `SatVizEngine` orchestration seam |
+| `presenters/cli.py` | Terminal frontend + `run.html` for browser viewing |
+| `main.py` | Argparse entry point (`--gui` reserved) |
+
+Data flow: `cli.py` → `engine.py` → `geocode`/`imagery` → `vision` → `enrichment` →
+`report` → `storage`.
+
+## Key Data Structures
+
+`Report` is the top-level interface between the engine and presenters. It bundles
+`Location`, the image path, a `VisionInsight` (land cover, features with confidence,
+summary) and an `Enrichment` (wikipedia, pois, weather, elevation, web, summary, errors).
+Every enrichment source is isolated — a failure is recorded in `Enrichment.errors` and the
+rest of the report still returns.
+
+## Output
+
+Per session: `output_images/YYYY-MM-DD/HHMMSS/{lat:.4f}-{lon:.4f}-{buffer}m.{jpg,json}`,
+a `.report.md`, and `run.html`. Runs older than `RETENTION_DAYS` are purged at startup.
+
+## Future GUI
+
+`satviz/presenters/web.py` is reserved for a browser/HTML GUI. It will consume the same
+`SatVizEngine.analyze_* -> Report` seam, so no core changes are needed to add it.
+
+## Python Environment
+
+Python 3.12, venv at `.venv/`. Dependencies pinned in `requirements.txt`
+(`earthengine-api`, `ollama`, `geopy`, `Pillow`, `requests`, `python-dotenv`, `pytest`).
+
+## Planning Docs
+
+`docs/PRD.md` and `docs/DESIGN_PLAN.md` (gitignored) capture the product requirements and
+the phased upgrade plan this architecture was built from.
