@@ -9,11 +9,18 @@ from time import perf_counter
 
 from satviz import config
 from satviz.application.cache import ResultCache, viewport_key
-from satviz.engine import SatVizEngine
-from satviz.geocode import geocode_place
+from satviz.application.jobs import JobManager
+from satviz.engine import AnalysisCancelled, SatVizEngine
+from satviz.geocode import geocode_place, reverse_geocode
 from satviz.storage import Storage
 
 logger = logging.getLogger(__name__)
+
+
+def _is_populated(display_name: str) -> bool:
+    """False for the geocoder's open-water / not-found fallbacks."""
+    return bool(display_name) and display_name != "Open water or remote area" \
+        and "not found" not in display_name.lower()
 
 
 @dataclass
@@ -28,8 +35,9 @@ class AnalysisResult:
 
 
 class AnalysisService:
-    def __init__(self, cache: ResultCache | None = None):
+    def __init__(self, cache: ResultCache | None = None, jobs: JobManager | None = None):
         self._cache = cache or ResultCache()
+        self._jobs = jobs or JobManager()
 
     # --- navigation-category operation ------------------------------------------
 
@@ -37,9 +45,16 @@ class AnalysisService:
         """Resolve a place to coordinates for a map 'fly to' — no analysis."""
         return geocode_place((place or "").strip())
 
+    def reverse(self, latitude: float, longitude: float) -> dict:
+        """Quick reverse-geocode so the UI can warn before a long open-water capture (E12)."""
+        location = reverse_geocode(latitude, longitude)
+        return {"display_name": location.display_name,
+                "located": _is_populated(location.display_name)}
+
     # --- analysis-category operation --------------------------------------------
 
-    def analyze(self, latitude: float, longitude: float, buffer_m: int) -> AnalysisResult:
+    def analyze(self, latitude: float, longitude: float, buffer_m: int,
+                on_stage=None, should_cancel=None) -> AnalysisResult:
         key = viewport_key(latitude, longitude, buffer_m)
         cached = self._cache.get(key)
         if cached is not None:
@@ -51,7 +66,10 @@ class AnalysisService:
         try:
             storage = Storage()
             engine = SatVizEngine(storage)
-            report = engine.analyze_coordinates(latitude, longitude, buffer_m)
+            report = engine.analyze_coordinates(latitude, longitude, buffer_m,
+                                                on_stage=on_stage, should_cancel=should_cancel)
+        except AnalysisCancelled:
+            raise
         except Exception as exc:
             return AnalysisResult(ok=False, error=f"Backend unavailable: {exc}",
                                   failure_kind="unavailable",
@@ -78,6 +96,38 @@ class AnalysisService:
         )
         self._cache.put(key, result)
         return result
+
+    # --- async job flow (live progress + cancel) --------------------------------
+
+    def start_analysis(self, latitude: float, longitude: float, buffer_m: int) -> str:
+        """Kick off an analysis on a background thread; return a job id to poll."""
+        return self._jobs.start(
+            lambda on_stage, should_cancel:
+                self.analyze(latitude, longitude, buffer_m, on_stage, should_cancel)
+        )
+
+    def job_status(self, job_id: str) -> dict | None:
+        """Poll-friendly snapshot of a job, or None if the id is unknown."""
+        job = self._jobs.get(job_id)
+        if job is None:
+            return None
+        status = {"state": job.state, "stage": job.stage}
+        if job.state == "done" and job.result is not None:
+            status["ok"] = job.result.ok
+            status["run_id"] = job.result.run_id
+        elif job.state == "error":
+            status["error"] = job.error
+        return status
+
+    def job_result(self, job_id: str) -> AnalysisResult | None:
+        """The finished AnalysisResult for rendering the report partial, or None."""
+        job = self._jobs.get(job_id)
+        if job is None or not isinstance(job.result, AnalysisResult):
+            return None
+        return job.result
+
+    def cancel_analysis(self, job_id: str) -> bool:
+        return self._jobs.cancel(job_id)
 
     # --- saved-run access -------------------------------------------------------
 

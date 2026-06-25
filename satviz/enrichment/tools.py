@@ -285,7 +285,9 @@ def area_history(title: str) -> str:
     pages = resp.json().get("query", {}).get("pages", {})
     for page in pages.values():
         if page.get("extract"):
-            return page["extract"].strip()
+            # Plain-text extracts can still carry MediaWiki "== Section ==" headers; drop them.
+            text = re.sub(r"\s*={2,}[^=\n]+={2,}\s*", " ", page["extract"])
+            return text.strip()
     return ""
 
 

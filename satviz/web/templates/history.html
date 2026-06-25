@@ -16,7 +16,7 @@
       <ul class="run-gallery">
         {% for run in runs %}
           <li>
-            <a href="/?run={{ run.run_id }}">
+            <a href="/?run={{ run.run_id }}" title="{{ run.display_name }}">
               <img src="{{ run.image_url }}" alt="" loading="lazy" onerror="this.style.display='none'">
               <span class="run-name">{{ run.display_name }}</span>
               <span class="run-id muted">{{ run.run_id }}</span>

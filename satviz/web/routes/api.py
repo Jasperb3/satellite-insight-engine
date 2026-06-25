@@ -37,10 +37,47 @@ def geocode(request: Request, place: str = ""):
     })
 
 
+@router.get("/reverse")
+def reverse(request: Request, latitude: float, longitude: float):
+    """Reverse-geocode a point so the UI can warn before an open-water capture — no analysis."""
+    return JSONResponse(_service(request).reverse(latitude, longitude))
+
+
 @router.post("/analyze")
 def analyze(request: Request, latitude: float = Form(...), longitude: float = Form(...),
             buffer_m: int = Form(...)):
     return _render(request, _service(request).analyze(latitude, longitude, buffer_m))
+
+
+@router.post("/analyze/start")
+def analyze_start(request: Request, latitude: float = Form(...), longitude: float = Form(...),
+                  buffer_m: int = Form(...)):
+    """Begin a background analysis (E1/E2); returns a job id the client polls."""
+    job_id = _service(request).start_analysis(latitude, longitude, buffer_m)
+    return JSONResponse({"job_id": job_id})
+
+
+@router.get("/analyze/status/{job_id}")
+def analyze_status(request: Request, job_id: str):
+    status = _service(request).job_status(job_id)
+    if status is None:
+        return JSONResponse({"error": "Unknown job."}, status_code=404)
+    return JSONResponse(status)
+
+
+@router.get("/analyze/result/{job_id}")
+def analyze_result(request: Request, job_id: str):
+    """Render the finished report partial for a completed job."""
+    result = _service(request).job_result(job_id)
+    if result is None:
+        return JSONResponse({"error": "No result for this job."}, status_code=404)
+    return _render(request, result)
+
+
+@router.delete("/analyze/{job_id}")
+def analyze_cancel(request: Request, job_id: str):
+    ok = _service(request).cancel_analysis(job_id)
+    return JSONResponse({"cancelled": ok}, status_code=200 if ok else 404)
 
 
 @router.get("/run/{run_id}")

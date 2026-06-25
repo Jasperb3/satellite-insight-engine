@@ -6,6 +6,7 @@ Every source is isolated: a failure is recorded in Enrichment.errors and the res
 report still returns."""
 
 import logging
+import re
 from time import perf_counter
 
 import ollama
@@ -85,8 +86,15 @@ def _safe(enrichment: Enrichment, name: str, fn):
         return result
     except Exception as exc:
         logger.warning("Enrichment source '%s' failed: %s", name, exc)
-        enrichment.errors.append(f"{name}: {exc}")
+        enrichment.errors.append(f"{name}: {_sanitize_error(exc)}")
         return None
+
+
+def _sanitize_error(exc: Exception) -> str:
+    """User-facing error text: strip request URLs so coordinates and internal
+    endpoints never leak into the sidebar. The full exception is logged separately."""
+    msg = re.sub(r"\s*for url:\s*\S+", "", str(exc))
+    return re.sub(r"https?://\S+", "", msg).strip()
 
 
 def _run_agent(place: str, vision_summary: str, wiki_title: str, located: bool) -> tuple[list[dict], str]:
