@@ -2,11 +2,14 @@
 (so it can double as an Ollama tool schema), and raises on failure so the orchestrator
 can record a per-source error without aborting the whole run."""
 
+import logging
 import re
 
 import requests
 
 from satviz import config
+
+logger = logging.getLogger(__name__)
 
 _TIMEOUT = 20
 _HEADERS = {"User-Agent": config.NOMINATIM_AGENT}
@@ -22,7 +25,12 @@ def search_web(query: str) -> list[dict]:
         list: Up to five search results.
     """
     if config.has_hosted_search():
-        return _hosted_search(query)
+        try:
+            return _hosted_search(query)
+        except Exception as exc:
+            # Rate limit (429) or any hosted failure: fall back to the free source.
+            logger.warning("Hosted web search failed (%s); falling back to Wikipedia search", exc)
+            return _wikipedia_search(query)
     return _wikipedia_search(query)
 
 

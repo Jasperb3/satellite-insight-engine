@@ -23,6 +23,26 @@ def test_search_web_falls_back_when_no_key(monkeypatch):
     assert "free" in called and "hosted" not in called
 
 
+def test_search_web_falls_back_when_hosted_rate_limited(monkeypatch):
+    monkeypatch.setattr(tools.config, "has_hosted_search", lambda: True)
+    called = {}
+
+    def boom(q):
+        called["hosted"] = q
+        raise RuntimeError("429 rate limit")
+
+    def free(q):
+        called["free"] = q
+        return [{"title": "x", "url": "u", "content": "c"}]
+
+    monkeypatch.setattr(tools, "_hosted_search", boom)
+    monkeypatch.setattr(tools, "_wikipedia_search", free)
+
+    result = tools.search_web("giza")
+    assert called.get("hosted") == "giza" and called.get("free") == "giza"
+    assert result == [{"title": "x", "url": "u", "content": "c"}]
+
+
 def test_safe_records_error_and_continues():
     enrichment = Enrichment()
 
