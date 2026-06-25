@@ -19,19 +19,29 @@ logger = logging.getLogger(__name__)
 _MAX_TOOL_ITERS = 4
 
 _AGENT_SYSTEM = (
-    "You are a geography research assistant. The satellite observation you are given is a "
-    "machine vision *hypothesis* that may be wrong — do not simply repeat or rubber-stamp "
-    "it. Using the web_search tool, establish what the location actually is and what is "
-    "notable about it, then explicitly reconcile: confirm the parts of the vision "
-    "observation that match reality and correct the parts that do not (e.g. a misidentified "
-    "river, or a landmark too small to see at this zoom). Keep searches focused. When done, "
-    "write 2-4 sentences of grounded context. Do not fabricate; rely on search results."
+    "You are a geography research assistant. You are given an AUTHORITATIVE location label "
+    "and sometimes a nearby Wikipedia article — treat these as the truth for WHERE this is. "
+    "NEVER infer or guess a place name, town, or country from raw latitude/longitude numbers; "
+    "if you are tempted to, stop and rely only on the provided label. The satellite "
+    "observation is a machine-vision hypothesis that may be wrong: confirm what matches and "
+    "correct what does not. If the location is open water or a remote area with no "
+    "settlement, say so plainly and describe the natural setting rather than inventing nearby "
+    "towns. Search using the place name or notable features, never raw coordinates. Keep "
+    "searches focused, then write 2-4 vivid, grounded sentences. Do not fabricate."
 )
+
+_REMOTE_LABELS = ("Open water or remote area",)
+
+
+def _is_located(display_name: str) -> bool:
+    return bool(display_name) and display_name not in _REMOTE_LABELS \
+        and "not found" not in display_name.lower()
 
 
 def enrich(image: ImageResult, vision: VisionInsight) -> Enrichment:
     loc = image.location
     enrichment = Enrichment()
+    located = _is_located(loc.display_name)
 
     enrichment.wikipedia = _safe(
         enrichment, "wikipedia", lambda: tools.wikipedia_nearby(loc.latitude, loc.longitude)
@@ -46,7 +56,21 @@ def enrich(image: ImageResult, vision: VisionInsight) -> Enrichment:
         enrichment.elevation_m = weather.pop("elevation_m", None)
         enrichment.weather = weather
 
-    web, summary = _run_agent(loc.display_name, loc.latitude, loc.longitude, vision.summary)
+    enrichment.events = _safe(
+        enrichment, "events", lambda: tools.natural_events(loc.latitude, loc.longitude)
+    ) or []
+
+    wiki_title = (enrichment.wikipedia or {}).get("title", "")
+    if wiki_title:
+        enrichment.history = _safe(enrichment, "history", lambda: tools.area_history(wiki_title)) or ""
+
+    if located:
+        label = wiki_title or loc.display_name.split(",")[0]
+        news = _safe(enrichment, "news", lambda: tools.recent_news(label)) or {}
+        enrichment.news = news.get("results", [])
+        enrichment.news_summary = news.get("summary", "")
+
+    web, summary = _run_agent(loc.display_name, vision.summary, wiki_title, located)
     enrichment.web = web
     enrichment.summary = summary
     return enrichment
@@ -65,18 +89,26 @@ def _safe(enrichment: Enrichment, name: str, fn):
         return None
 
 
-def _run_agent(place: str, lat: float, lon: float, vision_summary: str) -> tuple[list[dict], str]:
+def _run_agent(place: str, vision_summary: str, wiki_title: str, located: bool) -> tuple[list[dict], str]:
     """Run the lfm2.5 tool-calling loop. Returns (web_results, summary). Degrades to
-    ([], '') if the model or tool is unavailable."""
+    ([], '') if the model or tool is unavailable. The agent is anchored to the authoritative
+    location label so it cannot confabulate a place from coordinates."""
     available = {"search_web": tools.search_web}
+    anchor_lines = [f"Authoritative location: {place}."]
+    if wiki_title:
+        anchor_lines.append(f"Nearby Wikipedia article: {wiki_title}.")
+    if not located:
+        anchor_lines.append("This is open water or a remote area with little human presence; "
+                            "do not invent nearby towns.")
     messages = [
         {"role": "system", "content": _AGENT_SYSTEM},
         {
             "role": "user",
             "content": (
-                f"Location: {place} ({lat:.4f}, {lon:.4f}).\n"
-                f"Satellite observation: {vision_summary or 'n/a'}.\n"
-                "Research this location's significance and write a short context summary."
+                "\n".join(anchor_lines) + "\n"
+                f"Satellite observation (hypothesis, may be wrong): {vision_summary or 'n/a'}.\n"
+                "Research what is notable here and write a short, grounded context summary. "
+                "Search by place name or features, not coordinates."
             ),
         },
     ]

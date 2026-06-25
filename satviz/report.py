@@ -10,6 +10,11 @@ def build_report(image: ImageResult, vision: VisionInsight, enrichment: Enrichme
         image_path=image.image_path,
         vision=vision,
         enrichment=enrichment,
+        imagery_tier=image.imagery_tier,
+        imagery_source=image.imagery_source,
+        resolution_m=image.resolution_m,
+        imagery_date=image.imagery_date,
+        imagery_note=image.note,
         image_metadata=image.image_metadata,
     )
 
@@ -24,7 +29,14 @@ def render_markdown(report: Report) -> str:
     lines.append("")
     lines.append(f"- **Coordinates:** {loc.latitude:.4f}, {loc.longitude:.4f}")
     lines.append(f"- **Zoom (buffer):** {report.buffer} m")
-    lines.append(f"- **Image:** `{report.image_path}`")
+    if report.image_path:
+        source = report.imagery_source or "imagery"
+        res = f" ({report.resolution_m:.0f} m)" if report.resolution_m else ""
+        date = f", {report.imagery_date}" if report.imagery_date else ""
+        lines.append(f"- **Imagery:** {report.imagery_tier} — {source}{res}{date}")
+        lines.append(f"- **Image:** `{report.image_path}`")
+    else:
+        lines.append(f"- **Imagery:** none — {report.imagery_note}")
     lines.append("")
 
     lines.append("## From Above")
@@ -62,14 +74,40 @@ def render_markdown(report: Report) -> str:
         lines.append("")
     if e.weather or e.elevation_m is not None:
         bits = []
-        if e.elevation_m is not None:
-            bits.append(f"elevation {e.elevation_m:.0f} m")
         temp = e.weather.get("temperature")
         if temp is not None:
-            bits.append(f"current temp {temp}°C")
+            label = e.weather.get("label", "")
+            bits.append(f"{temp}°C {label}".strip())
+        if e.weather.get("humidity") is not None:
+            bits.append(f"humidity {e.weather['humidity']}%")
+        if e.weather.get("wind_kmh") is not None:
+            bits.append(f"wind {e.weather['wind_kmh']} km/h")
+        if e.elevation_m is not None:
+            bits.append(f"elevation {e.elevation_m:.0f} m")
         if bits:
             lines.append("**Environment:** " + ", ".join(bits))
+            if e.weather.get("forecast_url"):
+                lines.append(f" ([full forecast]({e.weather['forecast_url']}))")
             lines.append("")
+    if e.history:
+        lines.append("**History:** " + e.history)
+        lines.append("")
+    if e.news_summary or e.news:
+        lines.append("**Recent news:**")
+        lines.append("")
+        if e.news_summary:
+            lines.append(e.news_summary)
+            lines.append("")
+        for item in e.news[:5]:
+            lines.append(f"- [{item.get('title', 'source')}]({item.get('url', '')})")
+        lines.append("")
+    if e.events:
+        lines.append("**Active natural events nearby:**")
+        lines.append("")
+        for ev in e.events[:6]:
+            meta = " · ".join(x for x in [ev.get("category", ""), ev.get("date", "")] if x)
+            lines.append(f"- [{ev.get('title', 'event')}]({ev.get('url', '')}) — {meta}")
+        lines.append("")
     if e.web:
         lines.append("**Further Reading:**")
         lines.append("")

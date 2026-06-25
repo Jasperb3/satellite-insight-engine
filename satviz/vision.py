@@ -12,42 +12,52 @@ from satviz.models import ImageResult, VisionFeature, VisionInsight
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = (
-    "You are a remote-sensing image analyst. You are shown a true-colour satellite "
-    "composite of a small area. Describe only what is actually visible from above; do "
-    "not invent specific place names or facts you cannot see. Express uncertainty with "
-    "the confidence scores. Be precise about land cover, water, vegetation, urban "
-    "density, transport, and notable man-made or natural features."
+_SYSTEM_DETAILED = (
+    "You are a remote-sensing analyst with a storyteller's eye, reading a true-colour "
+    "satellite image of a small area. Describe only what is genuinely visible from above — "
+    "never invent place names or facts you cannot see — but bring the scene to life: the "
+    "textures and colours, the patterns of streets, fields or water, how nature and human "
+    "activity meet, and the one or two things that make this view distinctive. Be vivid and "
+    "specific, yet economical. Express uncertainty through the confidence scores."
+)
+
+_SYSTEM_REGIONAL = (
+    "You are a remote-sensing analyst reading a COARSE, wide-area satellite image (hundreds "
+    "of metres per pixel). Do not claim fine detail you cannot resolve at this scale. "
+    "Instead, interpret the broad geography: the balance of land and water, terrain and "
+    "landforms, climate and vegetation zones, coastlines, mountains, and the overall "
+    "character of the region. Be evocative but honest about the coarse resolution. Express "
+    "uncertainty through the confidence scores."
 )
 
 _INSTRUCTIONS = (
-    "Analyse this satellite image. Respond with a single JSON object and nothing else, "
-    "using exactly this schema:\n"
+    "Respond with a single JSON object and nothing else, using exactly this schema:\n"
     "{\n"
     '  "land_cover": ["<dominant classes, e.g. urban, cropland, forest, water, desert>"],\n'
     '  "features": [{"name": "<visible feature>", "confidence": <0.0-1.0>}],\n'
-    '  "summary": "<2-4 sentence plain-language description of the scene>"\n'
+    '  "summary": "<2-4 sentence vivid but grounded description of the scene>"\n'
     "}"
 )
 
 
 def describe(image: ImageResult) -> VisionInsight:
-    """Run the vision model on the image and return a structured + narrative reading."""
-    loc = image.location
-    prompt = (
-        f"{_INSTRUCTIONS}\n\n"
-        f"Context (do not over-rely on this; analyse the pixels): the image is centred "
-        f"near {loc.latitude:.4f}, {loc.longitude:.4f}."
-    )
-    logger.info("Calling vision model %s on %s", config.VISION_MODEL, image.image_path)
+    """Run the vision model on the image and return a structured + narrative reading. The
+    prompt adapts to the imagery tier: detailed local scenes vs coarse regional views."""
+    regional = image.imagery_tier == "regional"
+    system_prompt = _SYSTEM_REGIONAL if regional else _SYSTEM_DETAILED
+    scale_hint = ("This is a wide regional view — describe the broad landscape."
+                  if regional else "This is a close local view — describe the scene in detail.")
+    prompt = f"{_INSTRUCTIONS}\n\n{scale_hint}"
+    logger.info("Calling vision model %s (%s) on %s",
+                config.VISION_MODEL, image.imagery_tier, image.image_path)
     try:
         response = ollama.chat(
             model=config.VISION_MODEL,
             messages=[
-                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt, "images": [image.image_path]},
             ],
-            options={"temperature": 0.2, "num_ctx": 8192},
+            options={"temperature": 0.35, "num_ctx": 8192},
         )
         content = response["message"]["content"]
     except Exception as exc:

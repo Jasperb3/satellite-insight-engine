@@ -11,10 +11,16 @@ router = APIRouter()
 
 @router.get("/", response_class=HTMLResponse)
 def index(request: Request):
+    templates = request.app.state.templates
+    return templates.TemplateResponse(request, "index.html", {})
+
+
+@router.get("/history", response_class=HTMLResponse)
+def history(request: Request):
     service = request.app.state.service
     templates = request.app.state.templates
     return templates.TemplateResponse(
-        request, "index.html", {"runs": service.list_runs()},
+        request, "history.html", {"runs": service.list_runs(limit=60)},
     )
 
 

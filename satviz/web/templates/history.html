@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recent runs — Satellite Insight Engine</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="history-page">
+  <header>
+    <h1>🕘 Recent runs</h1>
+    <a class="back-link" href="/">← Back to map</a>
+  </header>
+  <main class="history-main">
+    {% if runs %}
+      <ul class="run-gallery">
+        {% for run in runs %}
+          <li>
+            <a href="/?run={{ run.run_id }}">
+              <img src="{{ run.image_url }}" alt="" loading="lazy" onerror="this.style.display='none'">
+              <span class="run-name">{{ run.display_name }}</span>
+              <span class="run-id muted">{{ run.run_id }}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No saved runs yet. Take a snapshot from the <a href="/">map</a>.</p>
+    {% endif %}
+  </main>
+</body>
+</html>

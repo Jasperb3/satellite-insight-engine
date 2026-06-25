@@ -106,6 +106,27 @@ def wikipedia_nearby(latitude: float, longitude: float) -> dict:
     }
 
 
+# Overpass mirrors tried in order — the main endpoint frequently 504s under load.
+_OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+]
+
+
+def _overpass_request(query: str) -> requests.Response:
+    last_exc = None
+    for endpoint in _OVERPASS_ENDPOINTS:
+        try:
+            resp = requests.post(endpoint, data={"data": query}, headers=_HEADERS, timeout=30)
+            resp.raise_for_status()
+            return resp
+        except Exception as exc:
+            last_exc = exc
+            continue
+    raise last_exc
+
+
 _POI_TAGS = ["aeroway", "harbour", "man_made", "leisure", "natural", "landuse", "amenity", "tourism"]
 
 
@@ -142,11 +163,7 @@ def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
         for tag in _POI_TAGS
     )
     query = f"[out:json][timeout:25];({selectors});out center 60;"
-    resp = requests.post(
-        "https://overpass-api.de/api/interpreter", data={"data": query},
-        headers=_HEADERS, timeout=30,
-    )
-    resp.raise_for_status()
+    resp = _overpass_request(query)
     seen, out = set(), []
     for el in resp.json().get("elements", []):
         tags = el.get("tags", {})
@@ -167,6 +184,18 @@ def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
     return out[:limit]
 
 
+# WMO weather codes -> (label, emoji). Compact map covering the common buckets.
+_WMO = {
+    0: ("Clear sky", "☀️"), 1: ("Mainly clear", "🌤️"), 2: ("Partly cloudy", "⛅"),
+    3: ("Overcast", "☁️"), 45: ("Fog", "🌫️"), 48: ("Rime fog", "🌫️"),
+    51: ("Light drizzle", "🌦️"), 53: ("Drizzle", "🌦️"), 55: ("Heavy drizzle", "🌦️"),
+    61: ("Light rain", "🌧️"), 63: ("Rain", "🌧️"), 65: ("Heavy rain", "🌧️"),
+    71: ("Light snow", "🌨️"), 73: ("Snow", "🌨️"), 75: ("Heavy snow", "❄️"),
+    80: ("Rain showers", "🌦️"), 81: ("Rain showers", "🌦️"), 82: ("Violent showers", "⛈️"),
+    95: ("Thunderstorm", "⛈️"), 96: ("Thunderstorm + hail", "⛈️"), 99: ("Thunderstorm + hail", "⛈️"),
+}
+
+
 def weather_and_elevation(latitude: float, longitude: float) -> dict:
     """Return current weather and terrain elevation for the coordinates (Open-Meteo).
 
@@ -175,15 +204,21 @@ def weather_and_elevation(latitude: float, longitude: float) -> dict:
         longitude (float): Longitude in decimal degrees.
 
     Returns:
-        dict: {temperature, windspeed, weathercode, elevation_m}.
+        dict: temperature, feels_like, humidity, wind_kmh, label, icon, forecast_url, elevation_m.
     """
     weather = requests.get(
         "https://api.open-meteo.com/v1/forecast",
-        params={"latitude": latitude, "longitude": longitude, "current_weather": True},
+        params={
+            "latitude": latitude, "longitude": longitude,
+            "current": "temperature_2m,relative_humidity_2m,apparent_temperature,"
+                       "weather_code,wind_speed_10m",
+        },
         headers=_HEADERS, timeout=_TIMEOUT,
     )
     weather.raise_for_status()
-    current = weather.json().get("current_weather", {})
+    current = weather.json().get("current", {})
+    code = current.get("weather_code")
+    label, icon = _WMO.get(code, ("", "🛰️"))
 
     elev = requests.get(
         "https://api.open-meteo.com/v1/elevation",
@@ -193,8 +228,92 @@ def weather_and_elevation(latitude: float, longitude: float) -> dict:
     elev.raise_for_status()
     elevations = elev.json().get("elevation", [])
     return {
-        "temperature": current.get("temperature"),
-        "windspeed": current.get("windspeed"),
-        "weathercode": current.get("weathercode"),
+        "temperature": current.get("temperature_2m"),
+        "feels_like": current.get("apparent_temperature"),
+        "humidity": current.get("relative_humidity_2m"),
+        "wind_kmh": current.get("wind_speed_10m"),
+        "label": label,
+        "icon": icon,
+        "forecast_url": f"https://www.yr.no/en/forecast/daily-table/{latitude},{longitude}",
         "elevation_m": elevations[0] if elevations else None,
     }
+
+
+def recent_news(place: str) -> dict:
+    """Recent news about a place via Tavily (synthesized answer + sources). Returns
+    {summary, results:[{title,url}]}. Requires TAVILY_API_KEY.
+
+    Args:
+        place (str): The place/area name to search news for.
+    """
+    if not config.TAVILY_API_KEY:
+        return {"summary": "", "results": []}
+    resp = requests.post(
+        "https://api.tavily.com/search",
+        headers={"Authorization": f"Bearer {config.TAVILY_API_KEY}"},
+        json={
+            "query": f"recent news about {place}",
+            "topic": "news", "time_range": "month",
+            "max_results": 5, "search_depth": "basic", "include_answer": True,
+        },
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    results = [{"title": r.get("title", ""), "url": r.get("url", "")}
+               for r in data.get("results", [])]
+    return {"summary": (data.get("answer") or "").strip(), "results": results}
+
+
+def area_history(title: str) -> str:
+    """A fuller historical/background extract for a Wikipedia article title (plain text).
+
+    Args:
+        title (str): The Wikipedia article title (e.g. from wikipedia_nearby).
+    """
+    if not title:
+        return ""
+    resp = requests.get(
+        "https://en.wikipedia.org/w/api.php",
+        params={
+            "action": "query", "prop": "extracts", "exsentences": 6,
+            "explaintext": 1, "redirects": 1, "format": "json", "titles": title,
+        },
+        headers=_HEADERS, timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    pages = resp.json().get("query", {}).get("pages", {})
+    for page in pages.values():
+        if page.get("extract"):
+            return page["extract"].strip()
+    return ""
+
+
+def natural_events(latitude: float, longitude: float, radius_deg: float = 5.0) -> list[dict]:
+    """Active natural events (wildfires, storms, floods, volcanoes) near the point via NASA
+    EONET (no key). Returns [{title, category, date, url}].
+
+    Args:
+        latitude (float): Latitude in decimal degrees.
+        longitude (float): Longitude in decimal degrees.
+        radius_deg (float): Half-size of the bounding box in degrees.
+    """
+    bbox = f"{longitude - radius_deg},{latitude + radius_deg}," \
+           f"{longitude + radius_deg},{latitude - radius_deg}"
+    resp = requests.get(
+        "https://eonet.gsfc.nasa.gov/api/v3/events",
+        params={"status": "open", "bbox": bbox, "limit": 10},
+        headers=_HEADERS, timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    out = []
+    for ev in resp.json().get("events", []):
+        cats = ev.get("categories", [])
+        geom = ev.get("geometry", [])
+        out.append({
+            "title": ev.get("title", ""),
+            "category": cats[0]["title"] if cats else "",
+            "date": geom[-1]["date"][:10] if geom and geom[-1].get("date") else "",
+            "url": ev.get("link", ""),
+        })
+    return out

@@ -31,8 +31,10 @@ def reverse_geocode(latitude: float, longitude: float) -> Location:
     try:
         result = _geolocator.reverse(f"{latitude}, {longitude}", language="en")
         raw = result.raw if result else {}
-        display = raw.get("display_name", "Location not found")
+        # Nominatim returns nothing over open water / remote areas — label honestly rather
+        # than "not found" so downstream grounding treats it as a real, sparse location.
+        display = raw.get("display_name") or "Open water or remote area"
     except Exception as exc:  # network/service errors shouldn't kill the run
         raw = {"error": str(exc)}
-        display = "Location not found"
+        display = "Open water or remote area"
     return Location(latitude=latitude, longitude=longitude, display_name=display, raw=raw)

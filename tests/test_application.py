@@ -28,11 +28,17 @@ def test_markers_skip_pois_without_coordinates():
 
 
 def test_run_data_shape():
-    report = {"location": {"latitude": 51.0, "longitude": -1.0},
-              "buffer": 1500, "enrichment": {"pois": []}}
+    report = {"location": {"latitude": 51.0, "longitude": -1.0}, "buffer": 1500,
+              "image_path": "x.jpg", "enrichment": {"pois": []}}
     data = run_data("2026-06-25_120000", report)
     assert data["image_url"] == "/asset/2026-06-25_120000/image"
     assert data["viewport"] == {"latitude": 51.0, "longitude": -1.0, "buffer_m": 1500}
+
+
+def test_run_data_no_image_when_missing():
+    report = {"location": {"latitude": 51.0, "longitude": -1.0}, "buffer": 1500,
+              "image_path": None, "enrichment": {"pois": []}}
+    assert run_data("2026-06-25_120000", report)["image_url"] is None
 
 
 def test_get_missing_run_is_not_found(tmp_path, monkeypatch):

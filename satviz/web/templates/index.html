@@ -16,6 +16,7 @@
       <button type="submit" class="secondary">Go</button>
     </form>
     <button id="snapshot" type="button" title="Analyse the current view (Enter)">📸 Snapshot</button>
+    <button id="history-btn" type="button" class="secondary" title="Browse past runs">🕘 History</button>
   </header>
 
   <main>
@@ -28,11 +29,10 @@
           <button data-pan="right" title="East">→</button>
           <button data-pan="down" title="South">↓</button>
         </div>
-        <div class="zoom">
-          <button data-zoom="in" title="Zoom in">＋</button>
-          <button data-zoom="out" title="Zoom out">－</button>
+        <div class="readout">
+          <span id="status-line" class="muted">Pan/zoom to frame a view, then Snapshot.</span>
+          <button id="reset-view" type="button" class="hidden">↩ Reset view</button>
         </div>
-        <span id="status-line" class="muted">Pan/zoom to frame a view, then press Snapshot.</span>
       </div>
     </section>
 
@@ -41,12 +41,6 @@
       <div id="report">
         <p class="muted">Frame a location on the map and press <strong>📸 Snapshot</strong> to analyse it.</p>
       </div>
-      <details id="history-wrap" open>
-        <summary>Recent runs</summary>
-        <div id="history" hx-get="/api/runs" hx-trigger="load, refreshRuns from:body">
-          {% include "partials/history.html" %}
-        </div>
-      </details>
     </aside>
   </main>
 

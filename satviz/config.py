@@ -16,6 +16,12 @@ GEE_PROJECT = _get("GEE_PROJECT")
 NOMINATIM_AGENT = _get("NOMINATIM_AGENT", "satellite-insight-engine")
 OLLAMA_API_KEY = _get("OLLAMA_API_KEY")  # optional; enables hosted web search
 
+# Optional enrichment keys (all gracefully skipped when absent).
+TAVILY_API_KEY = _get("TAVILY_API_KEY")   # recent news
+EXA_API_KEY = _get("EXA_API_KEY")         # reserved (neural search)
+NASA_API_KEY = _get("NASA_API_KEY")       # reserved; EONET/GIBS need no key
+WEATHER_API_KEY = _get("WEATHER_API_KEY")  # reserved; Open-Meteo is keyless
+
 VISION_MODEL = _get("VISION_MODEL", "minicpm-v4.5:q8_0")
 AGENT_MODEL = _get("AGENT_MODEL", "lfm2.5:latest")
 

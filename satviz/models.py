@@ -15,9 +15,14 @@ class Location:
 
 @dataclass
 class ImageResult:
-    image_path: str
     location: Location
     buffer: int
+    image_path: str | None = None              # None when no imagery tier could deliver
+    imagery_tier: str = "none"                  # detailed | regional | none
+    imagery_source: str | None = None           # e.g. "Sentinel-2", "NASA MODIS"
+    resolution_m: float | None = None
+    imagery_date: str | None = None
+    note: str = ""                              # human-facing note, e.g. "no imagery here"
     image_metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -45,6 +50,10 @@ class Enrichment:
     pois: list[dict[str, Any]] = field(default_factory=list)
     weather: dict[str, Any] = field(default_factory=dict)
     elevation_m: float | None = None
+    news: list[dict[str, Any]] = field(default_factory=list)
+    news_summary: str = ""
+    history: str = ""
+    events: list[dict[str, Any]] = field(default_factory=list)
     summary: str = ""
     errors: list[str] = field(default_factory=list)
 
@@ -54,9 +63,14 @@ class Report:
     """Top-level merged result. This is what the engine returns; presenters render it."""
     location: Location
     buffer: int
-    image_path: str
+    image_path: str | None
     vision: VisionInsight
     enrichment: Enrichment
+    imagery_tier: str = "none"
+    imagery_source: str | None = None
+    resolution_m: float | None = None
+    imagery_date: str | None = None
+    imagery_note: str = ""
     image_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

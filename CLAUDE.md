@@ -34,15 +34,20 @@ local planning `docs/`.
 ## External Services
 
 - **Google Earth Engine** (`ee`): requires a one-time `earthengine authenticate` and a GEE
-  project (from `GEE_PROJECT`). `satviz/imagery.py` initialises lazily. Sentinel-2
-  (`COPERNICUS/S2_HARMONIZED`) confirms recent cloud-free coverage; the RGB composite comes
-  from Landsat 8 TOA (`LANDSAT/LC08/C02/T1_TOA`).
+  project (from `GEE_PROJECT`). `satviz/imagery.py` initialises lazily. **Tiered, always-return
+  imagery**: for `buffer ≤ 6 km` (detailed) it tries Sentinel-2 SR (10 m, cloud-masked) →
+  Landsat 8 (30 m) → NASA GIBS; for wider views (regional) it uses NASA GIBS MODIS true-colour
+  (~250 m, WMS, no key). If every tier fails the report is still produced with no image.
+  Provenance (`imagery_tier`/`imagery_source`/`resolution_m`/`imagery_date`) flows into the
+  `Report` and a sidebar badge; the vision prompt switches between detailed and regional modes.
 - **Ollama**: `minicpm-v4.5:q8_0` (vision) and `lfm2.5` (enrichment agent) must be pulled.
 - **Nominatim (OSM)**: forward + reverse geocoding (`satviz/geocode.py`), user agent from
-  `NOMINATIM_AGENT`.
-- **Enrichment APIs** (`satviz/enrichment/tools.py`): Wikipedia REST/geosearch, Overpass
-  (POIs), Open-Meteo (weather + elevation), and Ollama hosted web search with a Wikipedia
-  free fallback.
+  `NOMINATIM_AGENT`. Open water / remote points are labelled "Open water or remote area" and
+  the agent is forbidden from inventing a place name from raw coordinates.
+- **Enrichment APIs** (`satviz/enrichment/tools.py`): Wikipedia REST/geosearch + history
+  extract, Overpass POIs (with mirror fallback), Open-Meteo (weather + elevation, keyless),
+  Tavily recent news (`TAVILY_API_KEY`), NASA EONET natural events (no key), and Ollama hosted
+  web search with a Wikipedia free fallback. Every source is isolated; failures degrade.
 
 ## Architecture
 

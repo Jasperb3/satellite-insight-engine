@@ -12,6 +12,7 @@
   {% set loc = r.location %}
   {% set v = r.vision %}
   {% set e = r.enrichment %}
+  {% set w = e.weather or {} %}
   <article class="report">
     <h2>{{ loc.display_name }}</h2>
     <p class="meta">
@@ -20,20 +21,48 @@
       {% if result.timing_ms %}· {{ result.timing_ms }} ms{% endif %}
     </p>
 
-    <img class="sat-image" src="{{ run_data.image_url }}" alt="satellite image of {{ loc.display_name }}">
+    {% if r.imagery_tier %}
+    <div class="provenance tier-{{ r.imagery_tier }}">
+      {% if r.imagery_tier == 'none' %}
+        🛰 No satellite imagery available for this view
+      {% elif r.imagery_tier == 'regional' %}
+        🌍 Regional view · {{ r.imagery_source }} ~{{ r.resolution_m|int }} m{% if r.imagery_date %} · {{ r.imagery_date }}{% endif %} · zoom in for detail
+      {% else %}
+        🛰 {{ r.imagery_source }} · {{ r.resolution_m|int }} m{% if r.imagery_date %} · {{ r.imagery_date }}{% endif %}
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if run_data.image_url %}
+      <img class="sat-image" src="{{ run_data.image_url }}" alt="satellite image of {{ loc.display_name }}">
+    {% else %}
+      <div class="no-image">No satellite imagery could be retrieved here — the report below is built from map, weather and web context.</div>
+    {% endif %}
+
+    {% if w.get('temperature') is not none or e.elevation_m is not none %}
+      <div class="weatherbar">
+        {% if w.get('temperature') is not none %}
+          <div class="wstat lead"><span class="wicon">{{ w.get('icon', '🛰️') }}</span>
+            <span class="wval">{{ w.temperature|round|int }}°C</span>
+            <span class="wlabel">{{ w.get('label') or 'Now' }}</span></div>
+        {% endif %}
+        {% if w.get('feels_like') is not none %}<div class="wstat"><span class="wlabel">Feels</span><span class="wval">{{ w.feels_like|round|int }}°C</span></div>{% endif %}
+        {% if w.get('humidity') is not none %}<div class="wstat"><span class="wlabel">💧 Humidity</span><span class="wval">{{ w.humidity|int }}%</span></div>{% endif %}
+        {% if w.get('wind_kmh') is not none %}<div class="wstat"><span class="wlabel">💨 Wind</span><span class="wval">{{ w.wind_kmh|round|int }} km/h</span></div>{% endif %}
+        {% if e.elevation_m is not none %}<div class="wstat"><span class="wlabel">⛰ Elevation</span><span class="wval">{{ e.elevation_m|round|int }} m</span></div>{% endif %}
+        {% if w.get('forecast_url') %}<a class="wforecast" href="{{ w.forecast_url }}" target="_blank" rel="noopener">Full forecast →</a>{% endif %}
+      </div>
+    {% endif %}
 
     <h3>From Above</h3>
     <p>{{ v.summary or "No summary produced." }}</p>
     {% if v.land_cover %}
-      <div class="chips">
-        {% for c in v.land_cover %}<span class="chip">{{ c }}</span>{% endfor %}
-      </div>
+      <div class="chips">{% for c in v.land_cover %}<span class="chip">{{ c }}</span>{% endfor %}</div>
     {% endif %}
     {% if v.features %}
       <ul class="features">
         {% for f in v.features %}
-          <li>
-            <span class="feat-name">{{ f.name }}</span>
+          <li><span class="feat-name">{{ f.name }}</span>
             {% if f.confidence %}
               <span class="bar"><span class="bar-fill" style="width: {{ (f.confidence * 100)|round }}%"></span></span>
               <span class="muted">{{ (f.confidence * 100)|round }}%</span>
@@ -46,13 +75,35 @@
     <h3>On the Ground</h3>
     {% if e.summary %}<p>{{ e.summary }}</p>{% endif %}
     {% if e.wikipedia and e.wikipedia.title %}
-      <p>
-        <strong>
-          {% if e.wikipedia.url %}<a href="{{ e.wikipedia.url }}" target="_blank" rel="noopener">{{ e.wikipedia.title }}</a>
-          {% else %}{{ e.wikipedia.title }}{% endif %}
-        </strong>
-        — {{ e.wikipedia.extract }}
-      </p>
+      <p><strong>
+        {% if e.wikipedia.url %}<a href="{{ e.wikipedia.url }}" target="_blank" rel="noopener">{{ e.wikipedia.title }}</a>
+        {% else %}{{ e.wikipedia.title }}{% endif %}
+      </strong> — {{ e.wikipedia.extract }}</p>
+    {% endif %}
+
+    {% if e.history %}
+      <h4>🏛 History</h4>
+      <p class="small">{{ e.history }}</p>
+    {% endif %}
+
+    {% if e.news_summary or e.news %}
+      <h4>📰 Recent news</h4>
+      {% if e.news_summary %}<p class="small">{{ e.news_summary }}</p>{% endif %}
+      {% if e.news %}
+        <ul class="weblinks">
+          {% for n in e.news[:5] %}<li><a href="{{ n.url }}" target="_blank" rel="noopener">{{ n.title or n.url }}</a></li>{% endfor %}
+        </ul>
+      {% endif %}
+    {% endif %}
+
+    {% if e.events %}
+      <h4>🌋 Active natural events nearby</h4>
+      <ul class="events">
+        {% for ev in e.events[:6] %}
+          <li><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.title }}</a>
+            <span class="muted">{{ ev.category }}{% if ev.date %} · {{ ev.date }}{% endif %}</span></li>
+        {% endfor %}
+      </ul>
     {% endif %}
 
     {% if e.pois %}
@@ -66,19 +117,10 @@
       </ul>
     {% endif %}
 
-    {% if e.elevation_m is not none or e.weather %}
-      <p class="env">
-        {% if e.elevation_m is not none %}⛰ {{ e.elevation_m|round|int }} m{% endif %}
-        {% if e.weather and e.weather.temperature is not none %} · 🌡 {{ e.weather.temperature }}°C{% endif %}
-      </p>
-    {% endif %}
-
     {% if e.web %}
       <h4>Further Reading</h4>
       <ul class="weblinks">
-        {% for w in e.web[:5] %}
-          <li><a href="{{ w.url }}" target="_blank" rel="noopener">{{ w.title or w.url }}</a></li>
-        {% endfor %}
+        {% for wl in e.web[:5] %}<li><a href="{{ wl.url }}" target="_blank" rel="noopener">{{ wl.title or wl.url }}</a></li>{% endfor %}
       </ul>
     {% endif %}
 

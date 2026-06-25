@@ -3,7 +3,14 @@
 // pans/zooms — only the explicit snapshot.
 
 let map;
+let priorView = null;  // framing to return to after a POI fly-in
 const markerLayer = L.layerGroup();
+
+function resetView() {
+  if (!priorView) return;
+  map.flyTo(priorView.center, priorView.zoom, { duration: 0.8 });
+  document.getElementById("reset-view").classList.add("hidden");
+}
 
 function initMap() {
   map = L.map("map").setView([51.5, -0.12], 13);
@@ -80,7 +87,7 @@ async function flyTo(place) {
   map.setView([data.latitude, data.longitude], 14);
 }
 
-// After a report swap, drop the centre + POI markers (no image overlay on the map).
+// Drop the centre + POI markers after a report (no image overlay on the map).
 function applyMarkers({ recenter = false } = {}) {
   const el = document.getElementById("run-data");
   if (!el) return;
@@ -100,7 +107,6 @@ function applyMarkers({ recenter = false } = {}) {
       .bindPopup(`<strong>${m.name}</strong>${m.kind ? `<br><em>${m.kind}</em>` : ""}`)
       .addTo(markerLayer);
   });
-  document.body.dispatchEvent(new Event("refreshRuns"));
 }
 
 function wireControls() {
@@ -111,7 +117,8 @@ function wireControls() {
     flyTo(document.getElementById("place").value);
   });
 
-  // Bottom-left controls pan/zoom the MAP (client-side, instant).
+  // Bottom-left arrows pan the MAP (client-side, instant). Zoom uses Leaflet's native
+  // top-left control + pinch, so there's no duplicate here.
   const panBy = { up: [0, -0.3], down: [0, 0.3], left: [-0.3, 0], right: [0.3, 0] };
   document.querySelectorAll("#controls [data-pan]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -120,11 +127,11 @@ function wireControls() {
       map.panBy([size.x * fx, size.y * fy]);
     });
   });
-  document.querySelectorAll("#controls [data-zoom]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      btn.dataset.zoom === "in" ? map.zoomIn() : map.zoomOut();
-    });
+
+  document.getElementById("history-btn").addEventListener("click", () => {
+    window.open("/history", "_blank");
   });
+  document.getElementById("reset-view").addEventListener("click", resetView);
 
   // Keyboard: WASD pan, Z/X zoom (map only), Enter = snapshot. Ignore while typing.
   document.addEventListener("keydown", (ev) => {
@@ -140,16 +147,20 @@ function wireControls() {
     else if (key === "enter") snapshot();
   });
 
-  // History reopen + POI focus (delegated; survives HTMX swaps).
+  // POI focus: remember the framing, then smoothly fly in so it's actually visible.
   document.body.addEventListener("click", (ev) => {
-    const hist = ev.target.closest(".history-item");
-    if (hist) { ev.preventDefault(); loadRun(hist.dataset.run); return; }
     const poi = ev.target.closest(".poi");
-    if (poi) map.panTo([parseFloat(poi.dataset.lat), parseFloat(poi.dataset.lon)]);
+    if (!poi) return;
+    priorView = { center: map.getCenter(), zoom: map.getZoom() };
+    map.flyTo([parseFloat(poi.dataset.lat), parseFloat(poi.dataset.lon)], 16, { duration: 0.8 });
+    document.getElementById("reset-view").classList.remove("hidden");
   });
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   initMap();
   wireControls();
+  // Deep-link: /?run=<id> opens a saved run directly (used by the History page).
+  const runId = new URLSearchParams(location.search).get("run");
+  if (runId) loadRun(runId);
 });

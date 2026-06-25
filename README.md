@@ -7,9 +7,9 @@ surrounding area with WASD/zoom.
 
 ![Satellite Insight Engine browser GUI](assets/screenshot.png)
 
-*The browser GUI: a Leaflet map with the satellite composite overlaid, and a side panel with
-the structured reading, confidence bars, enrichment that reconciles the vision model against
-ground truth, and clickable sources.*
+*The browser GUI: pan/zoom to frame a view, press Snapshot, and read the result in the side
+panel — imagery provenance badge, weather bar, the AI reading with confidence, plus news,
+history, POIs and sources. The layout is responsive (mobile bottom-sheet).*
 
 ```
 Enter a location to analyze: Eiffel Tower
@@ -87,11 +87,16 @@ python main.py --gui --port 9000     # custom port
 
 **CLI** controls during a session: `W/A/S/D` move, `Z/X` zoom in/out, `Q` quit.
 
-**Browser GUI** (FastAPI + Leaflet + HTMX): an interactive map is the primary surface —
-**click anywhere to analyse**, pan/zoom to explore, and use the on-map arrows / `W A S D` /
-`Z X` keys to step. The satellite composite is overlaid on the map, POIs appear as clickable
-markers, the report renders in a side panel with clickable links and confidence bars, and a
-"Recent runs" list reopens past analyses. You can also start it directly with uvicorn:
+**Browser GUI** (FastAPI + Leaflet + HTMX): pan/zoom the map freely (instant), then press
+**📸 Snapshot** to analyse the framed view — the capture area is derived from what's visible
+(zoom in for sharper, narrower; zoom out for wider regional context). Arrows / `W A S D` pan,
+native zoom + pinch zoom, `Enter` snapshots. The report renders in a side panel: an imagery
+**provenance badge** (which satellite tier + resolution), a **weather bar**, the AI reading,
+nearby POIs (click to fly in, then **Reset view**), recent **news**, **history**, active
+**natural events**, and clickable sources. **🕘 History** (top bar) opens past runs in a new
+tab. Imagery is **tiered and always-returns**: Sentinel-2 (10 m) up close, NASA GIBS MODIS for
+wide regional views, and a report even where no imagery exists. You can also start it with
+uvicorn:
 
 ```bash
 uvicorn satviz.web.app:app --reload

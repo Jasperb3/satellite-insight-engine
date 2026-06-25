@@ -46,11 +46,3 @@ def analyze(request: Request, latitude: float = Form(...), longitude: float = Fo
 @router.get("/run/{run_id}")
 def get_run(request: Request, run_id: str):
     return _render(request, _service(request).get_run(run_id))
-
-
-@router.get("/runs", response_class=HTMLResponse)
-def runs(request: Request):
-    templates = request.app.state.templates
-    return templates.TemplateResponse(
-        request, "partials/history.html", {"runs": _service(request).list_runs()},
-    )

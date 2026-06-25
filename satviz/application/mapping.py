@@ -27,7 +27,7 @@ def run_data(run_id: str, report: dict) -> dict:
     loc = report.get("location", {})
     return {
         "run_id": run_id,
-        "image_url": image_url(run_id),
+        "image_url": image_url(run_id) if report.get("image_path") else None,
         "viewport": {
             "latitude": loc.get("latitude"),
             "longitude": loc.get("longitude"),

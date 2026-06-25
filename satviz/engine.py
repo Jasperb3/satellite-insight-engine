@@ -7,7 +7,7 @@ from time import perf_counter
 
 from satviz import imagery
 from satviz.enrichment import enrich
-from satviz.models import ImageResult, Report
+from satviz.models import ImageResult, Report, VisionInsight
 from satviz.report import build_report
 from satviz.storage import Storage
 from satviz.vision import describe
@@ -19,26 +19,29 @@ class SatVizEngine:
     def __init__(self, storage: Storage | None = None):
         self.storage = storage or Storage()
 
-    def analyze_place(self, place_name: str, buffer: int) -> Report | None:
+    def analyze_place(self, place_name: str, buffer: int) -> Report:
         logger.info("Analyse place '%s' (buffer %d m)", place_name, buffer)
         image = imagery.fetch_by_place(place_name, buffer, self.storage.path_for)
         return self._analyze(image)
 
-    def analyze_coordinates(self, latitude: float, longitude: float, buffer: int) -> Report | None:
+    def analyze_coordinates(self, latitude: float, longitude: float, buffer: int) -> Report:
         logger.info("Analyse %.4f, %.4f (buffer %d m)", latitude, longitude, buffer)
         image = imagery.fetch_by_coordinates(latitude, longitude, buffer, self.storage.path_for)
         return self._analyze(image)
 
-    def _analyze(self, image: ImageResult | None) -> Report | None:
-        if image is None:
-            logger.warning("No image produced; aborting analysis")
-            return None
-
+    def _analyze(self, image: ImageResult) -> Report:
+        """Always returns a Report (the always-return invariant). Vision is skipped when no
+        imagery could be retrieved; enrichment runs regardless."""
         started = perf_counter()
-        t0 = perf_counter()
-        vision = describe(image)
-        logger.info("Vision done in %d ms (%d features)",
-                    int((perf_counter() - t0) * 1000), len(vision.features))
+
+        if image.image_path:
+            t0 = perf_counter()
+            vision = describe(image)
+            logger.info("Vision (%s) done in %d ms (%d features)",
+                        image.imagery_tier, int((perf_counter() - t0) * 1000), len(vision.features))
+        else:
+            vision = VisionInsight(summary=image.note or "No satellite imagery available here.")
+            logger.info("No imagery; skipping vision")
 
         t0 = perf_counter()
         enrichment = enrich(image, vision)
