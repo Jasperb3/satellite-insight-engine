@@ -3,13 +3,13 @@ caching, run addressing, and structured error handling. Contains no web-framewor
 
 import json
 import logging
-import os
 from dataclasses import dataclass
 from time import perf_counter
 
-from satviz import config
 from satviz.application.cache import ResultCache, viewport_key
+from satviz.application.index import RunIndex
 from satviz.application.jobs import JobManager
+from satviz.application.mapping import image_url
 from satviz.engine import AnalysisCancelled, SatVizEngine
 from satviz.geocode import geocode_place, reverse_geocode
 from satviz.storage import Storage
@@ -35,9 +35,12 @@ class AnalysisResult:
 
 
 class AnalysisService:
-    def __init__(self, cache: ResultCache | None = None, jobs: JobManager | None = None):
+    def __init__(self, cache: ResultCache | None = None, jobs: JobManager | None = None,
+                 index: RunIndex | None = None):
         self._cache = cache or ResultCache()
         self._jobs = jobs or JobManager()
+        self._index = index or RunIndex()
+        self._index.reconcile()
 
     # --- navigation-category operation ------------------------------------------
 
@@ -95,6 +98,7 @@ class AnalysisService:
             timing_ms=int((perf_counter() - started) * 1000),
         )
         self._cache.put(key, result)
+        self._index.add(result.run_id, report_dict)
         return result
 
     # --- async job flow (live progress + cancel) --------------------------------
@@ -148,30 +152,20 @@ class AnalysisService:
     def image_path_for(self, run_id: str) -> str | None:
         return Storage.find_image(Storage.resolve_run_dir(run_id))
 
-    def list_runs(self, limit: int = 25) -> list[dict]:
-        """Recent saved runs (newest first) for the history list."""
-        root = config.OUTPUT_ROOT
-        if not os.path.isdir(root):
-            return []
-        runs = []
-        for day in sorted(os.listdir(root), reverse=True):
-            day_dir = os.path.join(root, day)
-            if not os.path.isdir(day_dir):
-                continue
-            for folder in sorted(os.listdir(day_dir), reverse=True):
-                run_dir = os.path.join(day_dir, folder)
-                json_path = Storage.find_report_json(run_dir)
-                if not json_path:
-                    continue
-                run_id = f"{day}_{folder}"
-                try:
-                    with open(json_path) as handle:
-                        data = json.load(handle)
-                    name = data.get("location", {}).get("display_name", run_id)
-                except Exception:
-                    name = run_id
-                runs.append({"run_id": run_id, "display_name": name,
-                             "image_url": f"/asset/{run_id}/image"})
-                if len(runs) >= limit:
-                    return runs
-        return runs
+    def list_runs(self, limit: int = 20, offset: int = 0, query: str = "",
+                  tier: str = "") -> tuple[list[dict], int]:
+        """A page of saved runs (newest first) and the total matching count, from the index.
+        Supports name search and imagery-tier filtering (B9/E3)."""
+        rows, total = self._index.search(limit=limit, offset=offset, query=query, tier=tier)
+        runs = [{"run_id": r["run_id"], "display_name": r["display_name"],
+                 "imagery_tier": r["imagery_tier"], "image_url": image_url(r["run_id"])}
+                for r in rows]
+        return runs, total
+
+    def run_tiers(self) -> list[str]:
+        """Distinct imagery tiers present, for history filter chips (E3)."""
+        return self._index.tiers()
+
+    def run_points(self) -> list[dict]:
+        """Located runs for the history map (E10)."""
+        return self._index.points()

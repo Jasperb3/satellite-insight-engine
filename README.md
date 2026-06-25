@@ -100,7 +100,9 @@ clickable sources. The captured image can be shown as a **map overlay** at its t
 opened **fullscreen** by clicking it; POIs appear as **category-coded pins**. Other touches:
 **🔗 Copy link** to a saved run, **🎲 Surprise** (jump to a random famous place and analyse),
 an open-water warning before remote captures, and the map restores your **last position**.
-**🕘 History** (top bar) opens past runs in a new tab. Imagery is **tiered and always-returns**:
+**🕘 History** (top bar) opens past runs in a new tab — a **searchable, paginated** gallery
+with **imagery-tier filters** and a **map of every run** (click a pin to open it), served from a
+lightweight SQLite index. Imagery is **tiered and always-returns**:
 Sentinel-2 (10 m) up close, NASA GIBS MODIS for wide regional views, and a report even where no
 imagery exists. You can also start it with uvicorn:
 
@@ -133,8 +135,9 @@ python -m pytest
 ```
 
 Tests cover the pure/boundary modules (navigation math, storage layout + purge, report
-rendering, enrichment backend policy). Network and model calls are not exercised in the
-suite.
+rendering, enrichment backend policy) plus the application layer: the result cache, run index
+(search/pagination/reconcile), background-job lifecycle + cancellation, and presentation
+filters. Network and model calls are not exercised in the suite.
 
 ## Project layout
 
@@ -150,7 +153,7 @@ satviz/
   storage.py       # dated folders, report writing, rolling purge
   navigation.py    # WASD/zoom math
   engine.py        # UI-agnostic orchestration seam (returns Report; emits progress stages)
-  application/     # browser-facing service over the engine: DTOs, cache, jobs, error handling
+  application/     # browser-facing service: DTOs, cache, background jobs, run index, error handling
   web/             # FastAPI app: routes, Jinja templates, Leaflet + HTMX assets
   presenters/cli.py  # terminal frontend
 main.py
