@@ -1,6 +1,8 @@
 """Google Earth Engine integration. A single private helper holds the compositing,
 visualization, and export logic; the place- and coordinate-entry paths are thin wrappers."""
 
+import logging
+
 import ee
 import requests
 
@@ -8,69 +10,80 @@ from satviz import config
 from satviz.geocode import geocode_place, reverse_geocode
 from satviz.models import ImageResult, Location
 
+logger = logging.getLogger(__name__)
+
 _initialized = False
 
-# Sentinel-2 is used only to confirm recent cloud-free coverage exists for the point;
-# the RGB composite itself comes from Landsat 8 TOA (median, low cloud) for stability.
-_S2 = "COPERNICUS/S2_HARMONIZED"
-_L8 = "LANDSAT/LC08/C02/T1_TOA"
+# Sentinel-2 surface reflectance (10 m/px) — both confirms coverage and provides the RGB
+# composite, ~3x sharper than the previous Landsat 8 (30 m/px) source.
+_S2_SR = "COPERNICUS/S2_SR_HARMONIZED"
 
+# True-colour visualisation for Sentinel-2 reflectance (values ~0-10000).
 _VIZ_PARAMS = {
-    "min": 0.0,
-    "max": 1.0,
-    "gamma": 1.4,
+    "min": 0,
+    "max": 3000,
+    "gamma": 1.3,
     "bands": ["B4", "B3", "B2"],
 }
-_EXPORT_PARAMS = {
-    "dimensions": 2048,
+_FORMAT_PARAMS = {
     "format": "jpg",
     "formatOptions": {"quality": 100, "subsampling": "4:4:4"},
 }
+# Sentinel-2 native resolution, used to size the export. Floor keeps the sidebar image and
+# the vision model fed with enough pixels; ceiling avoids huge downloads / blur from upscale.
+_NATIVE_M_PER_PX = 10
+_MIN_DIM = 512
+_MAX_DIM = 1536
 
 
 def _ensure_initialized() -> None:
     global _initialized
     if _initialized:
         return
+    logger.info("Initialising Earth Engine (project %s)", config.GEE_PROJECT)
     ee.Initialize(project=config.require_gee_project())
     _initialized = True
 
 
-def _has_coverage(point: "ee.Geometry") -> bool:
-    """True if a recent, reasonably cloud-free Sentinel-2 scene exists for the point."""
-    collection = (
-        ee.ImageCollection(_S2)
+def _collection_for(point: "ee.Geometry") -> "ee.ImageCollection":
+    return (
+        ee.ImageCollection(_S2_SR)
         .filterBounds(point)
         .filterDate("2023-01-01", "2024-11-15")
         .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20))
     )
-    return collection.size().getInfo() > 0
+
+
+def _export_dimension(buffer: int) -> int:
+    """Pixels across the exported square, ~native 10 m/px, bounded to avoid huge downloads
+    or upscaling blur."""
+    return max(_MIN_DIM, min(_MAX_DIM, round((2 * buffer) / _NATIVE_M_PER_PX)))
 
 
 def _composite_and_export(latitude: float, longitude: float, buffer: int, image_path: str) -> dict:
-    """Build the Landsat RGB composite, download the JPG to image_path, and return its
+    """Build the Sentinel-2 RGB composite, download the JPG to image_path, and return its
     Earth Engine metadata. Raises on failure so callers can surface a clear error."""
     _ensure_initialized()
 
     point = ee.Geometry.Point([longitude, latitude])
     region = point.buffer(buffer).bounds()
 
-    if not _has_coverage(point):
+    collection = _collection_for(point)
+    if collection.size().getInfo() == 0:
         raise RuntimeError("No suitable cloud-free imagery found for this location.")
 
-    composite = (
-        ee.ImageCollection(_L8)
-        .filterDate("2020-01-01", "2024-11-15")
-        .filter(ee.Filter.lt("CLOUD_COVER", 10))
-        .select(["B4", "B3", "B2"])
-        .median()
-    )
+    composite = collection.select(["B4", "B3", "B2"]).median()
+    dimensions = _export_dimension(buffer)
+    logger.info("Exporting Sentinel-2 composite at %dpx (buffer %d m)", dimensions, buffer)
 
-    url = composite.getThumbURL({**_EXPORT_PARAMS, **_VIZ_PARAMS, "region": region})
+    url = composite.getThumbURL(
+        {**_FORMAT_PARAMS, **_VIZ_PARAMS, "region": region, "dimensions": dimensions}
+    )
     response = requests.get(url, timeout=120)
     response.raise_for_status()
     with open(image_path, "wb") as handle:
         handle.write(response.content)
+    logger.info("Downloaded %d KB to %s", len(response.content) // 1024, image_path)
 
     return composite.getInfo()
 
@@ -80,7 +93,7 @@ def fetch_by_place(place_name: str, buffer: int, path_for) -> ImageResult | None
     the output path (injected so imagery doesn't own the on-disk layout)."""
     location = geocode_place(place_name)
     if location is None:
-        print(f"Location '{place_name}' not found.")
+        logger.warning("Location '%s' not found", place_name)
         return None
     return _fetch(location.latitude, location.longitude, buffer, path_for, location)
 
@@ -95,7 +108,7 @@ def _fetch(latitude, longitude, buffer, path_for, location: Location | None) -> 
     try:
         image_metadata = _composite_and_export(latitude, longitude, buffer, image_path)
     except Exception as exc:
-        print(f"Error generating image: {exc}")
+        logger.error("Error generating image: %s", exc)
         return None
 
     if location is None:

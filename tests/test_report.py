@@ -43,4 +43,4 @@ def test_render_markdown_includes_key_sections():
 
 def test_render_markdown_handles_empty_enrichment():
     md = render_markdown(build_report(_image(), VisionInsight(summary="x"), Enrichment()))
-    assert "## Context & enrichment" in md
+    assert "## On the Ground" in md

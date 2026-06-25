@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from satviz.application import AnalysisService
+from satviz.logging_setup import configure
 from satviz.web.routes import api, pages
 
 _HERE = os.path.dirname(__file__)
@@ -15,6 +16,7 @@ TEMPLATES = Jinja2Templates(directory=os.path.join(_HERE, "templates"))
 
 
 def create_app() -> FastAPI:
+    configure()
     app = FastAPI(title="Satellite Insight Engine")
     app.mount("/static", StaticFiles(directory=os.path.join(_HERE, "static")), name="static")
 

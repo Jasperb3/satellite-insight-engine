@@ -27,7 +27,7 @@ def render_markdown(report: Report) -> str:
     lines.append(f"- **Image:** `{report.image_path}`")
     lines.append("")
 
-    lines.append("## What the image shows")
+    lines.append("## From Above")
     lines.append("")
     lines.append(v.summary or "_No summary produced._")
     lines.append("")
@@ -42,7 +42,7 @@ def render_markdown(report: Report) -> str:
             lines.append(f"- {feat.name}{conf}")
         lines.append("")
 
-    lines.append("## Context & enrichment")
+    lines.append("## On the Ground")
     lines.append("")
     if e.summary:
         lines.append(e.summary)
@@ -53,7 +53,7 @@ def render_markdown(report: Report) -> str:
         lines.append(f"**{title}** — {extract}")
         lines.append("")
     if e.pois:
-        lines.append("**Nearby map features (OpenStreetMap):**")
+        lines.append("**Points of Interest (OpenStreetMap):**")
         lines.append("")
         for poi in e.pois[:15]:
             name = poi.get("name", "unnamed")
@@ -71,7 +71,7 @@ def render_markdown(report: Report) -> str:
             lines.append("**Environment:** " + ", ".join(bits))
             lines.append("")
     if e.web:
-        lines.append("**From the web:**")
+        lines.append("**Further Reading:**")
         lines.append("")
         for item in e.web[:5]:
             lines.append(f"- [{item.get('title', 'source')}]({item.get('url', '')})")

@@ -2,7 +2,7 @@
 JS swaps it into the panel); the partial embeds the run-data the map JS reads."""
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from satviz.application import AnalysisResult
 from satviz.application.mapping import run_data
@@ -23,28 +23,24 @@ def _render(request: Request, result: AnalysisResult) -> HTMLResponse:
     return templates.TemplateResponse(request, "partials/report.html", context)
 
 
-@router.post("/search")
-def search(request: Request, place: str = Form("")):
-    return _render(request, _service(request).search(place))
+@router.get("/geocode")
+def geocode(request: Request, place: str = ""):
+    """Resolve a place name to coordinates so the map can 'fly to' it — no analysis."""
+    location = _service(request).geocode(place)
+    if location is None:
+        return JSONResponse({"ok": False, "error": f"Could not find '{place}'."}, status_code=404)
+    return JSONResponse({
+        "ok": True,
+        "latitude": location.latitude,
+        "longitude": location.longitude,
+        "display_name": location.display_name,
+    })
 
 
 @router.post("/analyze")
 def analyze(request: Request, latitude: float = Form(...), longitude: float = Form(...),
             buffer_m: int = Form(...)):
     return _render(request, _service(request).analyze(latitude, longitude, buffer_m))
-
-
-@router.post("/move")
-def move(request: Request, latitude: float = Form(...), longitude: float = Form(...),
-         buffer_m: int = Form(...), command: str = Form(...)):
-    return _render(request, _service(request).move(latitude, longitude, buffer_m, command))
-
-
-@router.post("/zoom")
-def zoom(request: Request, latitude: float = Form(...), longitude: float = Form(...),
-         buffer_m: int = Form(...), command: str = Form(...)):
-    # command is "z" (in) or "x" (out); navigation.py owns the buffer math.
-    return _render(request, _service(request).move(latitude, longitude, buffer_m, command))
 
 
 @router.get("/run/{run_id}")

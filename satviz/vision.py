@@ -2,12 +2,15 @@
 block plus a prose summary in a single call, then parses it into a VisionInsight."""
 
 import json
+import logging
 import re
 
 import ollama
 
 from satviz import config
 from satviz.models import ImageResult, VisionFeature, VisionInsight
+
+logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
     "You are a remote-sensing image analyst. You are shown a true-colour satellite "
@@ -36,6 +39,7 @@ def describe(image: ImageResult) -> VisionInsight:
         f"Context (do not over-rely on this; analyse the pixels): the image is centred "
         f"near {loc.latitude:.4f}, {loc.longitude:.4f}."
     )
+    logger.info("Calling vision model %s on %s", config.VISION_MODEL, image.image_path)
     try:
         response = ollama.chat(
             model=config.VISION_MODEL,
@@ -47,6 +51,7 @@ def describe(image: ImageResult) -> VisionInsight:
         )
         content = response["message"]["content"]
     except Exception as exc:
+        logger.error("Vision model error: %s", exc)
         return VisionInsight(summary=f"Vision model error: {exc}", raw_response="")
 
     return _parse(content)

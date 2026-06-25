@@ -35,12 +35,6 @@ def test_run_data_shape():
     assert data["viewport"] == {"latitude": 51.0, "longitude": -1.0, "buffer_m": 1500}
 
 
-def test_search_empty_is_not_found_without_network():
-    result = AnalysisService().search("   ")
-    assert result.ok is False
-    assert result.failure_kind == "not_found"
-
-
 def test_get_missing_run_is_not_found(tmp_path, monkeypatch):
     from satviz import config
     monkeypatch.setattr(config, "OUTPUT_ROOT", str(tmp_path))

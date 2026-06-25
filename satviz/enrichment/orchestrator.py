@@ -5,11 +5,16 @@ tool-using loop with web search to add broader context and a written summary.
 Every source is isolated: a failure is recorded in Enrichment.errors and the rest of the
 report still returns."""
 
+import logging
+from time import perf_counter
+
 import ollama
 
 from satviz import config
 from satviz.enrichment import tools
 from satviz.models import Enrichment, ImageResult, VisionInsight
+
+logger = logging.getLogger(__name__)
 
 _MAX_TOOL_ITERS = 4
 
@@ -49,9 +54,13 @@ def enrich(image: ImageResult, vision: VisionInsight) -> Enrichment:
 
 def _safe(enrichment: Enrichment, name: str, fn):
     """Run a source; on failure record the error and return None."""
+    t0 = perf_counter()
     try:
-        return fn()
+        result = fn()
+        logger.info("Enrichment source '%s' ok in %d ms", name, int((perf_counter() - t0) * 1000))
+        return result
     except Exception as exc:
+        logger.warning("Enrichment source '%s' failed: %s", name, exc)
         enrichment.errors.append(f"{name}: {exc}")
         return None
 
@@ -86,14 +95,17 @@ def _run_agent(place: str, lat: float, lon: float, vision_summary: str) -> tuple
             if not calls:
                 return collected, (msg.get("content") or "").strip()
             for call in calls:
-                fn = available.get(call["function"]["name"])
+                name = call["function"]["name"]
+                fn = available.get(name)
                 if not fn:
                     continue
+                logger.info("Agent tool call: %s(%s)", name, call["function"]["arguments"])
                 try:
                     result = fn(**call["function"]["arguments"])
                     if isinstance(result, list):
                         collected.extend(result)
                 except Exception as exc:
+                    logger.warning("Agent tool '%s' failed: %s", name, exc)
                     result = f"tool error: {exc}"
                 messages.append({
                     "role": "tool",

@@ -6,10 +6,12 @@
 
 import argparse
 
+from satviz.logging_setup import configure
 from satviz.presenters import cli
 
 
 def main() -> None:
+    configure()
     parser = argparse.ArgumentParser(description="Satellite Insight Engine")
     parser.add_argument(
         "--gui", action="store_true",

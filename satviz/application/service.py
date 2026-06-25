@@ -2,6 +2,7 @@
 caching, run addressing, and structured error handling. Contains no web-framework types."""
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from time import perf_counter
@@ -10,8 +11,9 @@ from satviz import config
 from satviz.application.cache import ResultCache, viewport_key
 from satviz.engine import SatVizEngine
 from satviz.geocode import geocode_place
-from satviz.navigation import handle_movement
 from satviz.storage import Storage
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,22 +31,11 @@ class AnalysisService:
     def __init__(self, cache: ResultCache | None = None):
         self._cache = cache or ResultCache()
 
-    # --- navigation-category operations -----------------------------------------
+    # --- navigation-category operation ------------------------------------------
 
-    def search(self, place: str) -> AnalysisResult:
-        place = (place or "").strip()
-        if not place:
-            return AnalysisResult(ok=False, error="Enter a place to search.",
-                                  failure_kind="not_found")
-        location = geocode_place(place)
-        if location is None:
-            return AnalysisResult(ok=False, error=f"Could not find '{place}'.",
-                                  failure_kind="not_found")
-        return self.analyze(location.latitude, location.longitude, config.DEFAULT_BUFFER)
-
-    def move(self, latitude: float, longitude: float, buffer_m: int, command: str) -> AnalysisResult:
-        lat, lon, buffer_m = handle_movement(latitude, longitude, buffer_m, command)
-        return self.analyze(lat, lon, buffer_m)
+    def geocode(self, place: str):
+        """Resolve a place to coordinates for a map 'fly to' — no analysis."""
+        return geocode_place((place or "").strip())
 
     # --- analysis-category operation --------------------------------------------
 
@@ -52,8 +43,10 @@ class AnalysisService:
         key = viewport_key(latitude, longitude, buffer_m)
         cached = self._cache.get(key)
         if cached is not None:
+            logger.info("Cache hit for %.4f, %.4f @ %d m", latitude, longitude, buffer_m)
             return cached
 
+        logger.info("Snapshot request %.4f, %.4f @ %d m", latitude, longitude, buffer_m)
         started = perf_counter()
         try:
             storage = Storage()

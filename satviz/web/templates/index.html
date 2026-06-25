@@ -11,10 +11,11 @@
 <body>
   <header>
     <h1>🛰️ Satellite Insight Engine</h1>
-    <form id="search-form" hx-post="/api/search" hx-target="#report" hx-indicator="#loading">
-      <input type="text" name="place" placeholder="Search a place… (e.g. Stonehenge)" autocomplete="off">
-      <button type="submit">Analyse</button>
+    <form id="search-form" autocomplete="off">
+      <input type="text" id="place" name="place" placeholder="Fly to a place… (e.g. Stonehenge)">
+      <button type="submit" class="secondary">Go</button>
     </form>
+    <button id="snapshot" type="button" title="Analyse the current view (Enter)">📸 Snapshot</button>
   </header>
 
   <main>
@@ -22,23 +23,23 @@
       <div id="map"></div>
       <div id="controls">
         <div class="nav-grid">
-          <button data-command="w" title="North">↑</button>
-          <button data-command="a" title="West">←</button>
-          <button data-command="d" title="East">→</button>
-          <button data-command="s" title="South">↓</button>
+          <button data-pan="up" title="North">↑</button>
+          <button data-pan="left" title="West">←</button>
+          <button data-pan="right" title="East">→</button>
+          <button data-pan="down" title="South">↓</button>
         </div>
         <div class="zoom">
-          <button data-zoom="z" title="Zoom in">＋</button>
-          <button data-zoom="x" title="Zoom out">－</button>
+          <button data-zoom="in" title="Zoom in">＋</button>
+          <button data-zoom="out" title="Zoom out">－</button>
         </div>
-        <span id="status-line" class="muted">Click the map or search to begin.</span>
+        <span id="status-line" class="muted">Pan/zoom to frame a view, then press Snapshot.</span>
       </div>
     </section>
 
     <aside id="panel">
-      <div id="loading" class="loading">Analysing… imagery → vision → enrichment</div>
+      <div id="loading" class="loading">Capturing… imagery → vision → enrichment</div>
       <div id="report">
-        <p class="muted">No analysis yet. Search a place, or click anywhere on the map.</p>
+        <p class="muted">Frame a location on the map and press <strong>📸 Snapshot</strong> to analyse it.</p>
       </div>
       <details id="history-wrap" open>
         <summary>Recent runs</summary>
