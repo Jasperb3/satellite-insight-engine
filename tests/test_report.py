@@ -35,7 +35,7 @@ def test_render_markdown_includes_key_sections():
     md = render_markdown(build_report(_image(), vision, enrichment))
     assert "# Satellite report — London, UK" in md
     assert "A city on a river." in md
-    assert "river (90%)" in md
+    assert "river (High)" in md
     assert "London" in md and "Capital city." in md
     assert "Heathrow" in md
     assert "elevation 11 m" in md

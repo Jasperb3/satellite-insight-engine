@@ -2,9 +2,9 @@ from datetime import date, timedelta
 
 from satviz.application.cache import ResultCache, viewport_key
 from satviz.application.mapping import (
-    chip_label, clean_links, domain, is_stale, looks_obscured, markers_from_report,
-    pretty_kind, pretty_place, pretty_time, relative_age, run_data, split_sentences,
-    tier_label,
+    chip_label, clean_links, confidence_level, domain, is_stale, looks_obscured,
+    markers_from_report, pretty_kind, pretty_place, pretty_time, relative_age, run_data,
+    split_sentences, tier_label,
 )
 from satviz.application.service import AnalysisService
 
@@ -114,6 +114,24 @@ def test_clean_links_drops_raw_urls_dedupes_by_domain_and_caps():
     assert "Another BBC" not in titles                                 # deduped by domain
     assert not any(t.startswith("http") for t in titles)               # raw-url entry dropped
     assert "Tokyo International Forum" in titles                        # picked the English segment
+
+
+def test_clean_links_dedupes_country_subdomains():
+    items = [
+        {"title": "Trip A", "url": "https://ca.trip.com/x"},
+        {"title": "Trip B", "url": "https://trip.com/y"},   # same registrable domain -> dropped
+        {"title": "Other", "url": "https://example.org/z"},
+    ]
+    assert [o["title"] for o in clean_links(items, limit=5)] == ["Trip A", "Other"]
+
+
+def test_confidence_level_bands():
+    assert confidence_level(0.95)["label"] == "High"
+    assert confidence_level(0.80)["label"] == "High"
+    assert confidence_level(0.79)["label"] == "Medium"
+    assert confidence_level(0.50)["label"] == "Medium"
+    assert confidence_level(0.49)["label"] == "Low"
+    assert confidence_level(0.95)["cls"] == "hi"
 
 
 def test_looks_obscured_detects_cloud_and_canopy():

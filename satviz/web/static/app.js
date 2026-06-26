@@ -439,10 +439,21 @@ function wireControls() {
     const btn = ev.target.closest(".copy-link");
     if (!btn) return;
     const url = `${location.origin}/?run=${encodeURIComponent(btn.dataset.runId)}`;
-    navigator.clipboard.writeText(url).then(() => {
-      btn.textContent = "✓ Copied";
-      setTimeout(() => { btn.textContent = "🔗 Copy link"; }, 1500);
-    });
+    const restore = () => setTimeout(() => { btn.textContent = "🔗 Copy link"; }, 1500);
+    // clipboard API needs a secure context; surface failures instead of failing silently (E7).
+    Promise.resolve(navigator.clipboard?.writeText(url))
+      .then(() => { btn.textContent = "✓ Copied"; restore(); })
+      .catch(() => { btn.textContent = "⚠ Copy failed"; restore(); });
+  });
+
+  // "Read more" on long History extracts: reveal the hidden tail. Delegated because the
+  // report partial is swapped in after each run; a button is more reliable than <details> (E4).
+  document.body.addEventListener("click", (ev) => {
+    const btn = ev.target.closest(".read-more");
+    if (!btn) return;
+    const tail = btn.nextElementSibling;
+    if (tail) tail.classList.remove("hidden");
+    btn.remove();
   });
 
   // POI focus: remember the framing, then smoothly fly in so it's actually visible.

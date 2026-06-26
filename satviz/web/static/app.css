@@ -39,15 +39,15 @@ main { flex: 1; display: flex; min-height: 0; }
 .sat-image { width: 100%; border-radius: 8px; margin-bottom: .8rem; }
 .chips { display: flex; flex-wrap: wrap; gap: .35rem; margin: .4rem 0; }
 .chip { background: #232733; padding: .15rem .55rem; border-radius: 999px; font-size: .8rem; }
-.features { list-style: none; padding: 0; }
-.features li { display: flex; align-items: center; gap: .5rem; margin: .25rem 0; font-size: .9rem; }
+.features { list-style: none; padding: 0; margin: .4rem 0; }
+.features li { display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+               padding: .15rem 0; font-size: .88rem; }
 .feat-name { flex: 1; }
-.bar { width: 70px; height: 6px; background: #2a2e37; border-radius: 3px; overflow: hidden; }
-.bar-fill { display: block; height: 100%; background: var(--accent); }
-/* Colour-code confidence so uncertainty is scannable (E10). */
-.bar-fill.hi { background: #5fb37a; }
-.bar-fill.mid { background: #d9b54a; }
-.bar-fill.lo { background: #d96a5a; }
+/* Colour-coded confidence level — a band reads more honestly than a fake-precise % (B5). */
+.conf { font-size: .72rem; font-weight: 600; padding: .05rem .45rem; border-radius: 999px; }
+.conf-hi { color: #8fe0a8; background: rgba(95, 179, 122, .16); }
+.conf-mid { color: #f0d27a; background: rgba(217, 181, 74, .16); }
+.conf-lo { color: #f0a08f; background: rgba(217, 106, 90, .16); }
 .pois, .weblinks { padding-left: 1.1rem; font-size: .88rem; }
 .poi { cursor: pointer; }
 .poi:hover { color: var(--accent); }
@@ -125,9 +125,9 @@ body.busy .loading, .htmx-request #loading, #loading.htmx-request { display: blo
                    background: #2a2410; color: #e6c878; border: 1px solid #4a3f1f; }
 
 /* Collapsible "Read more" for long History extracts (Q3) */
-details.inline-more { display: inline; }
-details.inline-more summary { display: inline; cursor: pointer; color: var(--accent); }
-details.inline-more[open] summary { display: none; }
+.read-more { background: none; border: none; padding: 0; cursor: pointer; color: var(--accent);
+             font: inherit; }
+.read-more:hover { text-decoration: underline; }
 
 /* Satellite-image lightbox (E9) */
 .sat-image { cursor: zoom-in; }
@@ -187,6 +187,8 @@ kbd { background: #0f1115; border: 1px solid #2a2e37; border-bottom-width: 2px; 
 .run-tier { align-self: flex-start; font-size: .68rem; padding: .1rem .45rem; }
 .run-thumb { position: relative; display: block; }
 .card-stale { position: absolute; top: .35rem; right: .35rem; margin: 0; }
+.run-noimg { display: flex; align-items: center; justify-content: center; height: 130px;
+             border-radius: 6px; background: #11141a; font-size: 2rem; opacity: .35; }
 
 /* Mobile: map full-bleed, sidebar becomes a draggable bottom sheet */
 @media (max-width: 760px) {

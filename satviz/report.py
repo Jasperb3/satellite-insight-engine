@@ -13,6 +13,14 @@ def _domain(url: str) -> str:
     return host[4:] if host.startswith("www.") else host or "source"
 
 
+def _conf_band(confidence: float) -> str:
+    """Qualitative confidence band, matching the web report — round-number scores don't
+    warrant a false-precise percentage (B5)."""
+    if confidence >= 0.8:
+        return "High"
+    return "Medium" if confidence >= 0.5 else "Low"
+
+
 def build_report(image: ImageResult, vision: VisionInsight, enrichment: Enrichment) -> Report:
     return Report(
         location=image.location,
@@ -57,10 +65,10 @@ def render_markdown(report: Report) -> str:
         lines.append(f"**Land cover:** {', '.join(v.land_cover)}")
         lines.append("")
     if v.features:
-        lines.append("**Visible features:**")
+        lines.append("### Visible features")
         lines.append("")
         for feat in v.features:
-            conf = f" ({feat.confidence:.0%})" if feat.confidence else ""
+            conf = f" ({_conf_band(feat.confidence)})" if feat.confidence else ""
             lines.append(f"- {feat.name}{conf}")
         lines.append("")
 
@@ -75,7 +83,7 @@ def render_markdown(report: Report) -> str:
         lines.append(f"**{title}** — {extract}")
         lines.append("")
     if e.pois:
-        lines.append("**Points of Interest (OpenStreetMap):**")
+        lines.append("### Points of Interest (OpenStreetMap)")
         lines.append("")
         for poi in e.pois[:15]:
             name = poi.get("name", "unnamed")
@@ -103,7 +111,7 @@ def render_markdown(report: Report) -> str:
         lines.append("**History:** " + e.history)
         lines.append("")
     if e.news_summary or e.news:
-        lines.append("**Recent news:**")
+        lines.append("### Recent news")
         lines.append("")
         if e.news_summary:
             lines.append(e.news_summary)
@@ -113,7 +121,7 @@ def render_markdown(report: Report) -> str:
             lines.append(f"- {item.get('title', 'source')} — [{_domain(url)}]({url})")
         lines.append("")
     if e.events:
-        lines.append("**Active natural events nearby:**")
+        lines.append("### Active natural events nearby")
         lines.append("")
         for ev in e.events[:6]:
             title = ev.get("title", "event")
@@ -128,7 +136,7 @@ def render_markdown(report: Report) -> str:
             lines.append(f"- {meta}" + (f" ([details]({url}))" if url else ""))
         lines.append("")
     if e.web:
-        lines.append("**Further Reading:**")
+        lines.append("### Further Reading")
         lines.append("")
         for item in e.web[:5]:
             lines.append(f"- [{item.get('title', 'source')}]({item.get('url', '')})")

@@ -33,6 +33,20 @@ def _ascii_ratio(s: str) -> float:
     return sum(c.isascii() and c.isalpha() for c in s) / len(s) if s else 0.0
 
 
+# Second-level labels that precede a country TLD (e.g. bbc.co.uk), so the registrable
+# domain keeps three parts there rather than collapsing to "co.uk".
+_SECOND_LEVEL = {"co", "com", "org", "gov", "ac", "net", "edu"}
+
+
+def _registrable(host: str) -> str:
+    """Registrable domain of a host, ignoring country subdomains so 'ca.trip.com' and
+    'trip.com' dedupe together (B2)."""
+    parts = host.split(".")
+    if len(parts) >= 3 and parts[-2] in _SECOND_LEVEL:
+        return ".".join(parts[-3:])
+    return ".".join(parts[-2:])
+
+
 def clean_links(items: list[dict], limit: int = 5) -> list[dict]:
     """Tidy 'Further Reading' links: drop entries whose title is just a raw URL, pick the
     most English-looking segment of a piped title, dedupe by domain, and cap the count
@@ -45,7 +59,7 @@ def clean_links(items: list[dict], limit: int = 5) -> list[dict]:
             continue
         if "|" in title:
             title = max((s.strip() for s in title.split("|")), key=_ascii_ratio)
-        host = domain(url)
+        host = _registrable(domain(url))
         if host and host in seen:
             continue
         seen.add(host)
@@ -83,6 +97,16 @@ _CHIP_OVERRIDES = {
     "bare soil": "Bare Soil",
 }
 _CHIP_FILLER = {"areas", "area", "terrain", "land", "cover"}
+
+
+def confidence_level(confidence: float) -> dict:
+    """Map a 0–1 confidence score to a qualitative, colour-coded level. The model only
+    emits round numbers, so a band label conveys the real precision better than a % (B5)."""
+    if confidence >= 0.8:
+        return {"label": "High", "cls": "hi"}
+    if confidence >= 0.5:
+        return {"label": "Medium", "cls": "mid"}
+    return {"label": "Low", "cls": "lo"}
 
 
 def chip_label(text: str) -> str:

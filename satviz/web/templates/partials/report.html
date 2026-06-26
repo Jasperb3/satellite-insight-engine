@@ -80,13 +80,7 @@
     {% if v.features %}
       <ul class="features">
         {% for f in v.features %}
-          <li><span class="feat-name">{{ f.name }}</span>
-            {% if f.confidence %}
-              {% set pct = (f.confidence * 100)|round|int %}
-              <span class="bar"><span class="bar-fill {{ 'hi' if pct >= 80 else 'mid' if pct >= 50 else 'lo' }}" style="width: {{ pct }}%"></span></span>
-              <span class="muted">{{ pct }}%</span>
-            {% endif %}
-          </li>
+          <li><span class="feat-name">{{ f.name }}</span>{% if f.confidence %}{% set lvl = f.confidence|confidence_level %}<span class="conf conf-{{ lvl.cls }}">{{ lvl.label }}</span>{% endif %}</li>
         {% endfor %}
       </ul>
     {% endif %}
@@ -99,7 +93,7 @@
       <h4>🏛 History{% if e.wikipedia and e.wikipedia.title %} · {% if e.wikipedia.url %}<a class="src" href="{{ e.wikipedia.url }}" target="_blank" rel="noopener">{{ e.wikipedia.title }}</a>{% else %}{{ e.wikipedia.title }}{% endif %}{% endif %}</h4>
       {% if hist_text %}
         {% set head, tail = hist_text|split_sentences(3) %}
-        <p class="small">{{ head }}{% if tail %} <details class="inline-more"><summary>Read more</summary> {{ tail }}</details>{% endif %}</p>
+        <p class="small">{{ head }}{% if tail %} <button type="button" class="read-more">Read more</button><span class="read-tail hidden"> {{ tail }}</span>{% endif %}</p>
       {% endif %}
     {% endif %}
 
@@ -114,7 +108,7 @@
     {% endif %}
 
     {% if e.events %}
-      <h4>🌋 Active natural events nearby</h4>
+      <h4>🌋 Active natural events nearby <span class="muted small">(within ~500 km, last 12 months)</span></h4>
       <ul class="events">
         {% for ev in e.events[:6] %}
           <li>{{ ev.title }}<span class="muted">{% if ev.category and ev.category[:4]|lower not in ev.title|lower %} · {{ ev.category }}{% endif %}{% if ev.date %} · {{ ev.date }}{% endif %}</span>

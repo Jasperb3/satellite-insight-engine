@@ -8,6 +8,10 @@ from satviz.models import Location
 
 _geolocator = Nominatim(user_agent=config.NOMINATIM_AGENT, timeout=10)
 
+# OSM classes for a business/POI node: when a typed landmark resolves to one of these, the
+# node's name (a café/gallery inside the landmark) makes a worse title than the search term.
+_AMENITY_CLASSES = {"amenity", "shop", "office", "craft"}
+
 
 def geocode_place(place_name: str) -> Location | None:
     """Resolve a place name to a Location, or None if it can't be found."""
@@ -18,11 +22,18 @@ def geocode_place(place_name: str) -> Location | None:
         return None
     if not result:
         return None
+    raw = getattr(result, "raw", {}) or {}
+    display = result.address
+    # If the geocoder landed on a business inside the place the user typed, prefer the search
+    # term as the title, keeping the region/country tail for context (B1/E1).
+    if raw.get("class") in _AMENITY_CLASSES:
+        tail = ", ".join(p.strip() for p in display.split(",")[-2:] if p.strip())
+        display = f"{place_name.strip()}, {tail}" if tail else place_name.strip()
     return Location(
         latitude=result.latitude,
         longitude=result.longitude,
-        display_name=result.address,
-        raw=getattr(result, "raw", {}) or {},
+        display_name=display,
+        raw=raw,
     )
 
 

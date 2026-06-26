@@ -4,6 +4,7 @@ can record a per-source error without aborting the whole run."""
 
 import logging
 import re
+from datetime import date, datetime
 
 import requests
 
@@ -206,6 +207,10 @@ def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
         name = tags.get("name:en") or native
         if not name or name in seen or _is_closed(tags, native or name):
             continue
+        # Drop truncated/corrupt names: too short, or starting mid-word with a lowercase
+        # Latin letter (a real proper noun or non-Latin script never does) (B4).
+        if len(name) < 3 or (name[0].isascii() and name[0].islower()):
+            continue
         tag = next((t for t in _POI_TAGS if t in tags), "")
         kind = tags.get(tag, "")
         if kind in _POI_NOISE_KINDS:
@@ -360,7 +365,9 @@ def recent_news(place: str, context: str = "") -> dict:
     keys: list[frozenset] = []
     for r in data.get("results", []):
         title = r.get("title", "")
-        if tokens and not _mentions(f"{title} {r.get('content', '')}", tokens):
+        # Match on the headline only: a place mentioned merely in body text is a weak signal
+        # and lets loosely-related stories through (E2).
+        if tokens and not _mentions(title, tokens):
             continue
         key = frozenset(_word_tokens(title))
         if any(key and other and len(key & other) / len(key | other) > 0.8 for other in keys):
@@ -425,11 +432,24 @@ def natural_events(latitude: float, longitude: float, radius_deg: float = 5.0) -
     for ev in resp.json().get("events", []):
         cats = ev.get("categories", [])
         geom = ev.get("geometry", [])
+        when = geom[-1]["date"][:10] if geom and geom[-1].get("date") else ""
+        # EONET keeps long-running events "open" for years; only surface the last 12 months
+        # so the "active nearby" list reflects current threats, not archived ones (B3).
+        if when and _days_since(when) > 365:
+            continue
         out.append({
             # EONET titles carry a trailing internal id (e.g. "… Congo 1023534"); drop it.
             "title": re.sub(r"\s+\d+$", "", ev.get("title", "")).strip(),
             "category": cats[0]["title"] if cats else "",
-            "date": geom[-1]["date"][:10] if geom and geom[-1].get("date") else "",
+            "date": when,
             "url": ev.get("link", ""),
         })
     return out
+
+
+def _days_since(date_str: str) -> float:
+    """Whole days between an ISO date and today; inf if it can't be parsed."""
+    try:
+        return (date.today() - datetime.strptime(date_str, "%Y-%m-%d").date()).days
+    except ValueError:
+        return float("inf")

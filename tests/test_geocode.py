@@ -6,6 +6,28 @@ class _Result:
         self.raw = raw
 
 
+class _GeoResult:
+    def __init__(self, lat, lon, address, raw):
+        self.latitude, self.longitude, self.address, self.raw = lat, lon, address, raw
+
+
+def test_geocode_place_uses_search_term_when_hit_is_amenity(monkeypatch):
+    res = _GeoResult(13.41, 103.86,
+                     "Gallery of a Thousand Buddhas, Angkor, Siem Reap, Cambodia",
+                     {"class": "amenity", "type": "gallery"})
+    monkeypatch.setattr(geocode._geolocator, "geocode", lambda *a, **k: res)
+    loc = geocode.geocode_place("Angkor Wat")
+    assert loc.display_name == "Angkor Wat, Siem Reap, Cambodia"
+
+
+def test_geocode_place_keeps_address_for_non_amenity(monkeypatch):
+    res = _GeoResult(13.41, 103.86, "Angkor Wat, Siem Reap, Cambodia",
+                     {"class": "historic", "type": "archaeological_site"})
+    monkeypatch.setattr(geocode._geolocator, "geocode", lambda *a, **k: res)
+    loc = geocode.geocode_place("angkor wat")
+    assert loc.display_name == "Angkor Wat, Siem Reap, Cambodia"
+
+
 def _patch_reverse(monkeypatch, raw):
     monkeypatch.setattr(geocode._geolocator, "reverse", lambda *a, **k: _Result(raw))
 

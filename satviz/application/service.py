@@ -168,7 +168,7 @@ class AnalysisService:
         rows, total = self._index.search(limit=limit, offset=offset, query=query, tier=tier)
         runs = [{"run_id": r["run_id"], "display_name": r["display_name"],
                  "imagery_tier": r["imagery_tier"], "imagery_date": r["imagery_date"],
-                 "image_url": image_url(r["run_id"])}
+                 "has_image": bool(r["has_image"]), "image_url": image_url(r["run_id"])}
                 for r in rows]
         return runs, total
 

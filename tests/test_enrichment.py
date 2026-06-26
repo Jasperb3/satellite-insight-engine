@@ -140,11 +140,57 @@ def test_recent_news_dedupes_near_identical_titles(monkeypatch):
     assert len(out["results"]) == 1
 
 
+def test_recent_news_requires_place_in_title_not_just_content(monkeypatch):
+    monkeypatch.setattr(tools.config, "TAVILY_API_KEY", "k")
+    results = [
+        {"title": "Angkor Wat restoration begins", "url": "http://a/1", "content": "works"},
+        {"title": "National blood donation drive", "url": "http://a/2",
+         "content": "held in Cambodia near Siem Reap"},   # place only in content -> dropped
+    ]
+    monkeypatch.setattr(tools.requests, "post", lambda *a, **k: _tavily_resp("", results))
+    out = tools.recent_news("Angkor Wat", "Angkor Wat, Siem Reap, Cambodia")
+    assert [r["title"] for r in out["results"]] == ["Angkor Wat restoration begins"]
+
+
+def test_natural_events_drops_events_over_a_year_old(monkeypatch):
+    from datetime import date, timedelta
+    recent = (date.today() - timedelta(days=30)).isoformat()
+    stale = (date.today() - timedelta(days=500)).isoformat()
+    payload = {"events": [
+        {"title": "Fresh Fire", "categories": [{"title": "Wildfires"}],
+         "geometry": [{"date": recent + "T00:00:00Z"}], "link": "u1"},
+        {"title": "Ancient Fire", "categories": [{"title": "Wildfires"}],
+         "geometry": [{"date": stale + "T00:00:00Z"}], "link": "u2"},
+    ]}
+
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self): return payload
+
+    monkeypatch.setattr(tools.requests, "get", lambda *a, **k: _Resp())
+    assert [e["title"] for e in tools.natural_events(1.0, 2.0)] == ["Fresh Fire"]
+
+
+def test_nearby_pois_skips_corrupt_or_short_names(monkeypatch):
+    elements = [
+        {"lat": 1, "lon": 2, "tags": {"name": "rah Khang Cheung", "tourism": "attraction"}},  # mid-word
+        {"lat": 1, "lon": 2, "tags": {"name": "AB", "tourism": "attraction"}},                # too short
+        {"lat": 1, "lon": 2, "tags": {"name": "Bayon Temple", "tourism": "attraction"}},
+        {"lat": 1, "lon": 2, "tags": {"name": "東京タワー", "tourism": "attraction"}},          # non-Latin kept
+    ]
+    monkeypatch.setattr(tools, "_overpass_request", lambda q: _overpass_resp(elements))
+    names = [p["name"] for p in tools.nearby_pois(0.0, 0.0)]
+    assert "rah Khang Cheung" not in names and "AB" not in names
+    assert "Bayon Temple" in names and "東京タワー" in names
+
+
 def test_natural_events_strips_trailing_id(monkeypatch):
+    from datetime import date, timedelta
+    recent = (date.today() - timedelta(days=10)).isoformat()
     payload = {"events": [{
         "title": "Wildfire in The Democratic Republic of Congo 1023534",
         "categories": [{"title": "Wildfires"}],
-        "geometry": [{"date": "2025-02-15T00:00:00Z"}],
+        "geometry": [{"date": recent + "T00:00:00Z"}],
         "link": "http://eonet/x",
     }]}
 
