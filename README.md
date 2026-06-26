@@ -30,12 +30,13 @@ Rich view: open output_images/2026-06-25/122519/run.html in your browser
 
 ```
 place name ──► geocode ──► Earth Engine imagery ──► vision model ──► enrichment ──► report
-                (Nominatim)   (Landsat 8 RGB)        (minicpm-v4.5)   (lfm2.5 + tools)  (JSON + report.md)
+                (Nominatim)   (tiered: Sentinel-2    (minicpm-v4.5)   (lfm2.5 + tools)  (JSON + report.md)
+                              → Landsat → NASA GIBS)
 ```
 
 Everything runs through a UI-agnostic engine (`satviz/engine.py`) that returns a `Report`
-object. The CLI is a thin presenter over it; a browser GUI can be added later without
-touching the core.
+object. The CLI and the browser GUI are both thin presenters over the same seam — the GUI
+was layered on without touching the core.
 
 ## Requirements
 

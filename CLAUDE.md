@@ -48,6 +48,10 @@ local planning `docs/`.
   extract, Overpass POIs (with mirror fallback), Open-Meteo (weather + elevation, keyless),
   Tavily recent news (`TAVILY_API_KEY`), NASA EONET natural events (no key), and Ollama hosted
   web search with a Wikipedia free fallback. Every source is isolated; failures degrade.
+  News is filtered to stories whose **headline** mentions a distinctive part of the location
+  (and de-duplicated by title); EONET events are limited to the last 12 months — better to
+  show nothing than something unrelated. When a typed landmark geocodes to an amenity node,
+  the search term is used as the title instead of the nearest café/shop.
 
 ## Architecture
 
@@ -68,7 +72,7 @@ Presenters are thin frontends over this seam.
 | `storage.py` | Dated run folders, report writing, 30-day rolling purge |
 | `navigation.py` | Pure WASD/zoom coordinate math |
 | `engine.py` | `SatVizEngine` orchestration seam (returns `Report`); emits coarse progress stages via an optional `on_stage` callback and honours a cooperative `should_cancel` between stages (raising `AnalysisCancelled`) |
-| `application/` | Browser-facing `AnalysisService`: DTOs, viewport cache, run addressing, error normalisation, presentation filters (`pretty_kind`/`relative_age`/`is_stale`/`marker_icon`), and reverse-geocode; `jobs.py` runs snapshots on background threads (`JobManager`) for live progress + cancel; `index.py` (`RunIndex`) is a SQLite cache of saved runs powering History search/pagination/map |
+| `application/` | Browser-facing `AnalysisService`: DTOs, viewport cache, run addressing, error normalisation, presentation filters in `mapping.py` (`pretty_kind`/`relative_age`/`is_stale`/`marker_icon`/`pretty_place`/`confidence_level`/`clean_links`/`domain`/`chip_label`/`looks_obscured`/`split_sentences`, registered as Jinja filters in `web/app.py`), and reverse-geocode; `jobs.py` runs snapshots on background threads (`JobManager`) for live progress + cancel; `index.py` (`RunIndex`) is a SQLite cache of saved runs powering History search/pagination/map |
 | `web/` | FastAPI app: `app.py` factory, `routes/` (pages + api), Jinja `templates/`, Leaflet+HTMX `static/` |
 | `presenters/cli.py` | Terminal frontend |
 | `main.py` | Argparse entry point (`--gui` launches uvicorn) |
@@ -92,7 +96,8 @@ treated as a *derived* view over the per-run JSON files (still the source of tru
 service adds each new GUI run to the index live and `reconcile()`s it against the filesystem on
 startup — picking up CLI-created runs and dropping rows for purged folders. This backs
 paginated listing, name search, imagery-tier filtering, and the runs map without walking the
-output tree per request. The DB is gitignored with `output_images/`.
+output tree per request. Rows also carry `imagery_date` (added via a column migration) so
+history cards can flag stale imagery. The DB is gitignored with `output_images/`.
 
 ## Key Data Structures
 
