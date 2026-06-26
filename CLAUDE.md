@@ -104,6 +104,8 @@ history cards can flag stale imagery. The DB is gitignored with `output_images/`
 `Report` is the top-level interface between the engine and presenters. It bundles
 `Location`, the image path, a `VisionInsight` (land cover, features with confidence,
 summary) and an `Enrichment` (wikipedia, pois, weather, elevation, web, summary, errors).
+Feature confidence is presented as a qualitative **High/Medium/Low** band (not a raw %) via
+`report.confidence_band`, shared by the CLI, the Markdown export and the web report.
 Every enrichment source is isolated — a failure is recorded in `Enrichment.errors` and the
 rest of the report still returns.
 

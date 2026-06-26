@@ -13,9 +13,9 @@ def _domain(url: str) -> str:
     return host[4:] if host.startswith("www.") else host or "source"
 
 
-def _conf_band(confidence: float) -> str:
-    """Qualitative confidence band, matching the web report — round-number scores don't
-    warrant a false-precise percentage (B5)."""
+def confidence_band(confidence: float) -> str:
+    """Qualitative confidence band shared by every presenter — round-number model scores
+    don't warrant a false-precise percentage (B5)."""
     if confidence >= 0.8:
         return "High"
     return "Medium" if confidence >= 0.5 else "Low"
@@ -68,7 +68,7 @@ def render_markdown(report: Report) -> str:
         lines.append("### Visible features")
         lines.append("")
         for feat in v.features:
-            conf = f" ({_conf_band(feat.confidence)})" if feat.confidence else ""
+            conf = f" ({confidence_band(feat.confidence)})" if feat.confidence else ""
             lines.append(f"- {feat.name}{conf}")
         lines.append("")
 

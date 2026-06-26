@@ -18,7 +18,7 @@ Coordinates: (48.8584, 2.2945)  Zoom: 2500m
 
 AI analysis:
 A dense urban scene bisected by a river, with a prominent open green corridor...
-Features: dense urban area (95%), river (85%)
+Features: dense urban area (High), river (Medium)
 
 Context:
 The Eiffel Tower was constructed in 1887–1889 for the International Exposition...

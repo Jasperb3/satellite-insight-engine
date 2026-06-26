@@ -9,7 +9,7 @@ from satviz import config
 from satviz.engine import SatVizEngine
 from satviz.models import Report
 from satviz.navigation import CONTROLS_HELP, handle_movement
-from satviz.report import render_markdown
+from satviz.report import confidence_band, render_markdown
 from satviz.storage import Storage, purge_old_runs
 
 
@@ -55,7 +55,7 @@ def _present(report: Report, storage: Storage) -> None:
     print(report.vision.summary or "(no summary)")
     if report.vision.features:
         feats = ", ".join(
-            f"{f.name} ({f.confidence:.0%})" if f.confidence else f.name
+            f"{f.name} ({confidence_band(f.confidence)})" if f.confidence else f.name
             for f in report.vision.features
         )
         print(f"Features: {feats}")

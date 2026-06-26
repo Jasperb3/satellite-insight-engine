@@ -5,6 +5,8 @@ import re
 from datetime import date, datetime
 from urllib.parse import urlsplit
 
+from satviz.report import confidence_band
+
 _STALE_DAYS = 90
 
 
@@ -99,14 +101,14 @@ _CHIP_OVERRIDES = {
 _CHIP_FILLER = {"areas", "area", "terrain", "land", "cover"}
 
 
+_CONF_CLASS = {"High": "hi", "Medium": "mid", "Low": "lo"}
+
+
 def confidence_level(confidence: float) -> dict:
-    """Map a 0–1 confidence score to a qualitative, colour-coded level. The model only
-    emits round numbers, so a band label conveys the real precision better than a % (B5)."""
-    if confidence >= 0.8:
-        return {"label": "High", "cls": "hi"}
-    if confidence >= 0.5:
-        return {"label": "Medium", "cls": "mid"}
-    return {"label": "Low", "cls": "lo"}
+    """Qualitative confidence label plus its CSS class for the web report. Shares the band
+    thresholds with every other presenter via `confidence_band` (B5)."""
+    label = confidence_band(confidence)
+    return {"label": label, "cls": _CONF_CLASS[label]}
 
 
 def chip_label(text: str) -> str:
