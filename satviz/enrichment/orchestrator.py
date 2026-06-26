@@ -67,7 +67,7 @@ def enrich(image: ImageResult, vision: VisionInsight) -> Enrichment:
 
     if located:
         label = wiki_title or loc.display_name.split(",")[0]
-        news = _safe(enrichment, "news", lambda: tools.recent_news(label)) or {}
+        news = _safe(enrichment, "news", lambda: tools.recent_news(label, loc.display_name)) or {}
         enrichment.news = news.get("results", [])
         enrichment.news_summary = news.get("summary", "")
 

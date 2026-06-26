@@ -1,9 +1,117 @@
 """Map an engine Report (as a dict) into the browser-facing shapes: the map's run-data
 payload (viewport, markers, image url) and the context the report template renders."""
 
+import re
 from datetime import date, datetime
+from urllib.parse import urlsplit
 
 _STALE_DAYS = 90
+
+
+def domain(url: str) -> str:
+    """Bare host of a URL for display as a source label, e.g.
+    'https://www.ap.org/world/x' -> 'ap.org'. Empty for missing/garbage input."""
+    if not url:
+        return ""
+    host = urlsplit(url if "//" in url else "//" + url).netloc
+    host = host.split("@")[-1].split(":")[0]
+    return host[4:] if host.startswith("www.") else host
+
+
+def split_sentences(text: str, n: int = 3) -> tuple[str, str]:
+    """Split prose into a head of the first `n` sentences and the remaining tail, so a
+    long extract can be shown with a 'Read more' expander (Q3/E2)."""
+    text = (text or "").strip()
+    if not text:
+        return "", ""
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    return " ".join(sentences[:n]).strip(), " ".join(sentences[n:]).strip()
+
+
+def _ascii_ratio(s: str) -> float:
+    """Share of characters that are plain ASCII letters — a rough 'how English' score."""
+    return sum(c.isascii() and c.isalpha() for c in s) / len(s) if s else 0.0
+
+
+def clean_links(items: list[dict], limit: int = 5) -> list[dict]:
+    """Tidy 'Further Reading' links: drop entries whose title is just a raw URL, pick the
+    most English-looking segment of a piped title, dedupe by domain, and cap the count
+    (Q8/E13)."""
+    out, seen = [], set()
+    for item in items or []:
+        url = item.get("url", "")
+        title = (item.get("title") or "").strip()
+        if not title or title.lower().startswith(("http://", "https://")):
+            continue
+        if "|" in title:
+            title = max((s.strip() for s in title.split("|")), key=_ascii_ratio)
+        host = domain(url)
+        if host and host in seen:
+            continue
+        seen.add(host)
+        out.append({"title": title, "url": url})
+        if len(out) >= limit:
+            break
+    return out
+
+
+# Phrases in a vision summary that suggest cloud/canopy/haze limiting ground detail.
+# Worded to avoid matching the negatives ("cloud-free", "no clouds").
+_OBSCURED_RE = re.compile(
+    r"cloud cover|cloud-covered|cloudy|overcast|dense canopy|thick canopy|tree canopy|"
+    r"limited visibility|obscured|partially hidden|heavy haze|hazy|dense smoke|under cloud|fog\b",
+    re.IGNORECASE,
+)
+
+
+def looks_obscured(summary: str) -> bool:
+    """True if the vision summary reads as cloud/canopy/haze-limited imagery (E14)."""
+    return bool(_OBSCURED_RE.search(summary or ""))
+
+
+# Common land-cover phrasings from the vision model -> clean tag labels (E15).
+_CHIP_OVERRIDES = {
+    "sparsely vegetated terrain": "Sparse Vegetation",
+    "sparsely vegetated": "Sparse Vegetation",
+    "forested areas": "Forest",
+    "forested area": "Forest",
+    "forested": "Forest",
+    "built-up area": "Urban",
+    "built-up areas": "Urban",
+    "water body": "Water",
+    "agricultural land": "Agriculture",
+    "bare soil": "Bare Soil",
+}
+_CHIP_FILLER = {"areas", "area", "terrain", "land", "cover"}
+
+
+def chip_label(text: str) -> str:
+    """Tidy a land-cover tag into a short Title-Case chip (E15)."""
+    if not text:
+        return ""
+    key = text.strip().lower()
+    if key in _CHIP_OVERRIDES:
+        return _CHIP_OVERRIDES[key]
+    words = [w for w in re.split(r"\s+", key) if w not in _CHIP_FILLER]
+    return " ".join(words).title() or text.strip().title()
+
+
+# Address fragments that are pure numbers/punctuation (house numbers, postcodes).
+_NUMERIC_PART = re.compile(r"^[\d\s\-/]+$")
+
+
+def pretty_place(display_name: str) -> str:
+    """Shorten a raw geocoder display name to a readable title: drop house-number and
+    postcode fragments, and for long addresses keep the most-specific part plus the
+    region/country tail (e.g. '…Forum, 1, Marunouchi 3, Chiyoda, Tokyo, 100-0005, Japan'
+    -> '…Forum, Tokyo, Japan'). The full name is kept for a tooltip elsewhere."""
+    if not display_name:
+        return ""
+    parts = [p.strip() for p in display_name.split(",") if p.strip()]
+    meaningful = [p for p in parts if not _NUMERIC_PART.match(p)]
+    if len(meaningful) <= 3:
+        return ", ".join(meaningful) or display_name.strip()
+    return ", ".join([meaningful[0], *meaningful[-2:]])
 
 
 def _days_old(date_str: str):

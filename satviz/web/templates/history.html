@@ -41,8 +41,11 @@
         {% for run in runs %}
           <li>
             <a href="/?run={{ run.run_id }}" title="{{ run.display_name }}">
-              <img src="{{ run.image_url }}" alt="" loading="lazy" onerror="this.style.display='none'">
-              <span class="run-name">{{ run.display_name }}</span>
+              <span class="run-thumb">
+                <img src="{{ run.image_url }}" alt="" loading="lazy" onerror="this.style.display='none'">
+                {% if run.imagery_date|is_stale %}<span class="stale-badge card-stale" title="Imagery over 90 days old">⚠ stale</span>{% endif %}
+              </span>
+              <span class="run-name">{{ run.display_name|pretty_place }}</span>
               <span class="run-id muted">{{ run.run_id|pretty_time }}</span>
               {% if run.imagery_tier %}<span class="chip run-tier">{{ run.imagery_tier|tier_label }}</span>{% endif %}
             </a>
@@ -72,16 +75,18 @@
     <script>
       // E10: bird's-eye map of every run location; click a pin to open that run.
       const pts = JSON.parse(document.getElementById("run-points").textContent);
-      const hmap = L.map("history-map");
+      const hmap = L.map("history-map", {
+        worldCopyJump: false, maxBounds: [[-85, -180], [85, 180]], maxBoundsViscosity: 1.0,
+      });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19, attribution: "© OpenStreetMap contributors",
+        maxZoom: 19, minZoom: 1, noWrap: true, attribution: "© OpenStreetMap contributors",
       }).addTo(hmap);
       const group = L.featureGroup(pts.map((p) => {
         const href = `/?run=${encodeURIComponent(p.run_id)}`;
-        // Popup for desktop hover/click; direct navigation so a single tap works on touch (E8).
+        // Open the run in a new tab so the history page (search/filter/scroll) is preserved (B4/E10).
         return L.marker([p.latitude, p.longitude])
-          .bindPopup(`<a href="${href}">${p.display_name}</a>`)
-          .on("click", () => { location.href = href; });
+          .bindPopup(`<a href="${href}" target="_blank" rel="noopener">${p.display_name}</a>`)
+          .on("click", () => { window.open(href, "_blank", "noopener"); });
       })).addTo(hmap);
       hmap.fitBounds(group.getBounds().pad(0.2), { maxZoom: 12 });
       // The map div has no width until the column layout settles; remeasure (B2).

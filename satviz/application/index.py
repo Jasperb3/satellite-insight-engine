@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS runs (
     longitude     REAL,
     buffer_m      INTEGER,
     imagery_tier  TEXT,
+    imagery_date  TEXT,
     has_image     INTEGER NOT NULL DEFAULT 0
 );
 """
@@ -39,7 +40,14 @@ class RunIndex:
         self._conn = sqlite3.connect(self._path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute(_SCHEMA)
+        self._migrate()
         self._conn.commit()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after a DB was first created (older index.db files)."""
+        existing = {r["name"] for r in self._conn.execute("PRAGMA table_info(runs)")}
+        if "imagery_date" not in existing:
+            self._conn.execute("ALTER TABLE runs ADD COLUMN imagery_date TEXT")
 
     # --- writes -----------------------------------------------------------------
 
@@ -54,16 +62,19 @@ class RunIndex:
             loc.get("longitude"),
             report.get("buffer"),
             report.get("imagery_tier"),
+            report.get("imagery_date"),
             1 if report.get("image_path") else 0,
         )
         with self._lock:
             self._conn.execute(
                 "INSERT INTO runs (run_id, day, display_name, latitude, longitude, "
-                "buffer_m, imagery_tier, has_image) VALUES (?, ?, ?, ?, ?, ?, ?, ?) "
+                "buffer_m, imagery_tier, imagery_date, has_image) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(run_id) DO UPDATE SET "
                 "display_name=excluded.display_name, latitude=excluded.latitude, "
                 "longitude=excluded.longitude, buffer_m=excluded.buffer_m, "
-                "imagery_tier=excluded.imagery_tier, has_image=excluded.has_image",
+                "imagery_tier=excluded.imagery_tier, imagery_date=excluded.imagery_date, "
+                "has_image=excluded.has_image",
                 row,
             )
             self._conn.commit()

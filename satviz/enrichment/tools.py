@@ -133,6 +133,12 @@ _POI_TAGS = ["aeroway", "harbour", "man_made", "leisure", "natural", "landuse", 
 # Signage and generic markers add noise rather than insight; rank them last.
 _DEMOTED_KINDS = {"information", "guidepost", "artwork", "yes"}
 
+# Low-value street furniture that should never appear as a "point of interest" (B9/E5).
+_POI_NOISE_KINDS = {
+    "toilets", "atm", "post_box", "bench", "waste_basket", "telephone",
+    "vending_machine", "drinking_water", "bicycle_parking", "parking",
+}
+
 # Dead businesses leak into OSM via closure phrases in the name or lifecycle-prefixed
 # tags. Drop them so the POI list reflects what's actually there (B6).
 _CLOSED_NAME_RE = re.compile(r"fechad|closed|encerrad|fermé|ferme|geschlossen|cerrad",
@@ -156,8 +162,23 @@ def _poi_rank(poi: dict) -> int:
     return 0
 
 
+def _cap_pois(pois: list[dict], limit: int, per_kind: int = 2) -> list[dict]:
+    """Trim a ranked POI list: at most `per_kind` of any one category, `limit` total,
+    so the panel isn't flooded with banks/cafes (B9/E5)."""
+    capped, counts = [], {}
+    for poi in pois:
+        key = poi["kind"] or poi["tag"]
+        if counts.get(key, 0) >= per_kind:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+        capped.append(poi)
+        if len(capped) >= limit:
+            break
+    return capped
+
+
 def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
-                limit: int = 20) -> list[dict]:
+                limit: int = 10) -> list[dict]:
     """List notable named OpenStreetMap features near the coordinates via Overpass,
     ranked so substantive features come before tourist signage.
 
@@ -180,21 +201,27 @@ def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
     seen, out = set(), []
     for el in resp.json().get("elements", []):
         tags = el.get("tags", {})
-        name = tags.get("name")
-        if not name or name in seen or _is_closed(tags, name):
+        native = tags.get("name")
+        # Prefer an English label where OSM has one; keep the native name as a subtitle (E6).
+        name = tags.get("name:en") or native
+        if not name or name in seen or _is_closed(tags, native or name):
+            continue
+        tag = next((t for t in _POI_TAGS if t in tags), "")
+        kind = tags.get(tag, "")
+        if kind in _POI_NOISE_KINDS:
             continue
         seen.add(name)
-        tag = next((t for t in _POI_TAGS if t in tags), "")
         center = el.get("center", {})
         out.append({
             "name": name,
+            "native": native if native and native != name else "",
             "tag": tag,
-            "kind": tags.get(tag, ""),
+            "kind": kind,
             "lat": el.get("lat", center.get("lat")),
             "lon": el.get("lon", center.get("lon")),
         })
     out.sort(key=_poi_rank)
-    return out[:limit]
+    return _cap_pois(out, limit)
 
 
 # WMO weather codes -> (label, emoji). Compact map covering the common buckets.
@@ -252,20 +279,73 @@ def weather_and_elevation(latitude: float, longitude: float) -> dict:
     }
 
 
-def recent_news(place: str) -> dict:
-    """Recent news about a place via Tavily (synthesized answer + sources). Returns
-    {summary, results:[{title,url}]}. Requires TAVILY_API_KEY.
+# Generic words shared by many place names ("International Forum", "Grand Loop Road"):
+# matching on these alone produces false positives (St Petersburg forum, Grand Canyon),
+# so they are excluded when deciding whether a story is actually about this place.
+_GENERIC_PLACE_WORDS = {
+    "international", "forum", "road", "street", "avenue", "lane", "loop", "grand",
+    "park", "national", "city", "town", "village", "lake", "river", "mount", "mountain",
+    "saint", "north", "south", "east", "west", "central", "square", "center", "centre",
+    "bridge", "valley", "hill", "beach", "bay", "island", "county", "district", "region",
+    "state", "province", "area", "point", "fort", "port", "cape", "union", "great",
+    "upper", "lower", "monument", "memorial", "reserve", "border", "station", "united",
+    "states", "republic",
+}
+
+# A synthesized answer containing any of these is admitting it found nothing relevant.
+_NEWS_NEGATIVE_MARKERS = (
+    "not available", "no recent news", "no news", "couldn't find", "could not find",
+    "sources mainly discuss", "do not mention", "does not mention", "unrelated", "not found",
+)
+
+
+def _word_tokens(*phrases: str) -> set[str]:
+    """Lower-cased word tokens of >=4 chars (no digits) from the given phrases."""
+    out: set[str] = set()
+    for phrase in phrases:
+        for tok in re.findall(r"[^\W\d_]+", phrase or "", re.UNICODE):
+            if len(tok) >= 4:
+                out.add(tok.lower())
+    return out
+
+
+def _distinctive_tokens(*phrases: str) -> set[str]:
+    """Place tokens with the generic shared words removed, so matching keys on the
+    parts that actually identify this location. Falls back to all tokens if every
+    word was generic."""
+    toks = _word_tokens(*phrases)
+    return (toks - _GENERIC_PLACE_WORDS) or toks
+
+
+def _mentions(text: str, tokens: set[str]) -> bool:
+    low = (text or "").lower()
+    return any(tok in low for tok in tokens)
+
+
+def recent_news(place: str, context: str = "") -> dict:
+    """Recent news genuinely about a place via Tavily (synthesized answer + sources).
+    Returns {summary, results:[{title,url}]}. Requires TAVILY_API_KEY.
+
+    Results are filtered to those that actually mention a distinctive part of the
+    location (the place name, city, region or country drawn from `context`); generic
+    shared words are ignored to avoid false matches. Near-duplicate headlines are
+    dropped, and the summary is discarded if it is negative or off-topic. If nothing
+    relevant survives, an empty result is returned — better no news than wrong news.
 
     Args:
         place (str): The place/area name to search news for.
+        context (str): Fuller location string (e.g. the geocoder display name) used to
+            derive disambiguating city/region/country tokens.
     """
     if not config.TAVILY_API_KEY:
         return {"summary": "", "results": []}
+    geo_suffix = ", ".join(p.strip() for p in context.split(",")[-2:] if p.strip())
+    query = " ".join(p for p in ["recent news", place, geo_suffix] if p)
     resp = requests.post(
         "https://api.tavily.com/search",
         headers={"Authorization": f"Bearer {config.TAVILY_API_KEY}"},
         json={
-            "query": f"recent news about {place}",
+            "query": query,
             "topic": "news", "time_range": "month",
             "max_results": 5, "search_depth": "basic", "include_answer": True,
         },
@@ -273,9 +353,29 @@ def recent_news(place: str) -> dict:
     )
     resp.raise_for_status()
     data = resp.json()
-    results = [{"title": r.get("title", ""), "url": r.get("url", "")}
-               for r in data.get("results", [])]
-    return {"summary": (data.get("answer") or "").strip(), "results": results}
+    tokens = _distinctive_tokens(place, context)
+
+    # Keep only stories that mention the location; drop near-duplicate headlines.
+    kept: list[dict] = []
+    keys: list[frozenset] = []
+    for r in data.get("results", []):
+        title = r.get("title", "")
+        if tokens and not _mentions(f"{title} {r.get('content', '')}", tokens):
+            continue
+        key = frozenset(_word_tokens(title))
+        if any(key and other and len(key & other) / len(key | other) > 0.8 for other in keys):
+            continue
+        keys.append(key)
+        kept.append({"title": title, "url": r.get("url", "")})
+
+    if not kept:
+        return {"summary": "", "results": []}
+
+    summary = (data.get("answer") or "").strip()
+    low = summary.lower()
+    if any(m in low for m in _NEWS_NEGATIVE_MARKERS) or (tokens and not _mentions(summary, tokens)):
+        summary = ""
+    return {"summary": summary, "results": kept}
 
 
 def area_history(title: str) -> str:
@@ -326,7 +426,8 @@ def natural_events(latitude: float, longitude: float, radius_deg: float = 5.0) -
         cats = ev.get("categories", [])
         geom = ev.get("geometry", [])
         out.append({
-            "title": ev.get("title", ""),
+            # EONET titles carry a trailing internal id (e.g. "… Congo 1023534"); drop it.
+            "title": re.sub(r"\s+\d+$", "", ev.get("title", "")).strip(),
             "category": cats[0]["title"] if cats else "",
             "date": geom[-1]["date"][:10] if geom and geom[-1].get("date") else "",
             "url": ev.get("link", ""),

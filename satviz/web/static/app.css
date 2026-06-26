@@ -54,6 +54,8 @@ main { flex: 1; display: flex; min-height: 0; }
 a { color: var(--accent); }
 .muted { color: var(--muted); }
 .small { font-size: .8rem; }
+.src { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.src:hover { color: var(--accent); }
 .env { font-size: .9rem; }
 .error { background: #3a1d1d; border: 1px solid #6b2b2b; padding: .8rem; border-radius: 8px; }
 
@@ -118,6 +120,15 @@ body.busy .loading, .htmx-request #loading, #loading.htmx-request { display: blo
 .stale-badge { margin-left: .4rem; padding: 0 .35rem; border-radius: 4px; font-size: .72rem;
                background: #4a2410; color: #f0b070; border: 1px solid #6b3b1f; }
 
+/* Obscured-imagery banner (E14) */
+.notice.obscured { margin: .5rem 0; padding: .45rem .6rem; border-radius: 6px; font-size: .8rem;
+                   background: #2a2410; color: #e6c878; border: 1px solid #4a3f1f; }
+
+/* Collapsible "Read more" for long History extracts (Q3) */
+details.inline-more { display: inline; }
+details.inline-more summary { display: inline; cursor: pointer; color: var(--accent); }
+details.inline-more[open] summary { display: none; }
+
 /* Satellite-image lightbox (E9) */
 .sat-image { cursor: zoom-in; }
 .lightbox { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.88);
@@ -160,7 +171,7 @@ kbd { background: #0f1115; border: 1px solid #2a2e37; border-bottom-width: 2px; 
 .tier-chips .chip { text-decoration: none; color: var(--ink); background: #232733;
     padding: .2rem .7rem; border-radius: 999px; font-size: .8rem; border: 1px solid transparent; }
 .tier-chips .chip.on { border-color: var(--accent); color: var(--accent); }
-#history-map { height: 280px; border-radius: 10px; margin-bottom: 1.2rem; }
+#history-map { height: 280px; max-width: 680px; border-radius: 10px; margin: 0 auto 1.2rem; }
 .pager { display: flex; gap: 1rem; align-items: center; justify-content: center; margin: 1.4rem 0; }
 .pager a { color: var(--accent); text-decoration: none; }
 .pager .disabled { color: #3a4150; }
@@ -174,6 +185,8 @@ kbd { background: #0f1115; border: 1px solid #2a2e37; border-bottom-width: 2px; 
 .run-name { font-size: .85rem; line-height: 1.25; max-height: 2.5em; overflow: hidden; }
 .run-id { font-size: .7rem; }
 .run-tier { align-self: flex-start; font-size: .68rem; padding: .1rem .45rem; }
+.run-thumb { position: relative; display: block; }
+.card-stale { position: absolute; top: .35rem; right: .35rem; margin: 0; }
 
 /* Mobile: map full-bleed, sidebar becomes a draggable bottom sheet */
 @media (max-width: 760px) {
