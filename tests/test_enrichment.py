@@ -176,6 +176,18 @@ def test_nearby_pois_drops_closed_businesses(monkeypatch):
     assert names == ["Live Cafe"]
 
 
+def test_nearby_pois_prefers_english_name_with_native_fallback(monkeypatch):
+    elements = [
+        {"lat": 1.0, "lon": 2.0, "tags": {"name": "東京タワー", "name:en": "Tokyo Tower",
+                                          "tourism": "attraction"}},
+        {"lat": 1.0, "lon": 2.0, "tags": {"name": "Local Park", "leisure": "park"}},
+    ]
+    monkeypatch.setattr(tools, "_overpass_request", lambda q: _overpass_resp(elements))
+    pois = {p["name"]: p for p in tools.nearby_pois(0.0, 0.0)}
+    assert pois["Tokyo Tower"]["native"] == "東京タワー"   # English preferred, native kept
+    assert pois["Local Park"]["native"] == ""             # no separate native name
+
+
 def test_nearby_pois_filters_noise_and_caps_per_category(monkeypatch):
     elements = [
         {"lat": 1.0, "lon": 2.0, "tags": {"name": "Public Toilet", "amenity": "toilets"}},

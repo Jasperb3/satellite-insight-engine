@@ -6,9 +6,18 @@ import os
 from satviz.application.index import RunIndex
 
 
-def _report(name="Somewhere", lat=51.0, lon=-1.0, tier="detailed", image="x.jpg"):
+def _report(name="Somewhere", lat=51.0, lon=-1.0, tier="detailed", image="x.jpg",
+            imagery_date="2026-06-01"):
     return {"location": {"display_name": name, "latitude": lat, "longitude": lon},
-            "buffer": 1500, "imagery_tier": tier, "image_path": image}
+            "buffer": 1500, "imagery_tier": tier, "image_path": image,
+            "imagery_date": imagery_date}
+
+
+def test_add_stores_imagery_date_for_stale_badge(tmp_path):
+    idx = _index(tmp_path)
+    idx.add("2026-06-25_120000", _report("Dated", imagery_date="2025-01-15"))
+    runs, _ = idx.search()
+    assert runs[0]["imagery_date"] == "2025-01-15"
 
 
 def _index(tmp_path):

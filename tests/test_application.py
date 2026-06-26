@@ -2,8 +2,9 @@ from datetime import date, timedelta
 
 from satviz.application.cache import ResultCache, viewport_key
 from satviz.application.mapping import (
-    domain, is_stale, markers_from_report, pretty_kind, pretty_place, pretty_time,
-    relative_age, run_data, tier_label,
+    chip_label, clean_links, domain, is_stale, looks_obscured, markers_from_report,
+    pretty_kind, pretty_place, pretty_time, relative_age, run_data, split_sentences,
+    tier_label,
 )
 from satviz.application.service import AnalysisService
 
@@ -78,6 +79,55 @@ def test_pretty_place_drops_numeric_house_and_postcode():
     out = pretty_place(raw)
     assert "2000" not in out and out.startswith("Macquarie Street")
     assert out.endswith("Australia")
+
+
+def test_split_sentences_head_and_tail():
+    text = "One sentence. Two sentence. Three sentence. Four sentence. Five."
+    head, tail = split_sentences(text, 3)
+    assert head == "One sentence. Two sentence. Three sentence."
+    assert tail == "Four sentence. Five."
+
+
+def test_split_sentences_short_text_has_no_tail():
+    head, tail = split_sentences("Just one. And two.", 3)
+    assert head == "Just one. And two." and tail == ""
+
+
+def test_split_sentences_empty():
+    assert split_sentences("", 3) == ("", "")
+
+
+def test_clean_links_drops_raw_urls_dedupes_by_domain_and_caps():
+    items = [
+        {"title": "Good Article", "url": "https://www.bbc.com/a"},
+        {"title": "https://journals.openedition.org/x", "url": "https://journals.openedition.org/x"},
+        {"title": "Another BBC", "url": "https://bbc.com/b"},          # same domain -> dropped
+        {"title": "公式 | 東京国際フォーラム | Tokyo International Forum", "url": "https://t.jp/x"},
+        {"title": "Five", "url": "https://e.com/5"},
+        {"title": "Six", "url": "https://f.com/6"},
+        {"title": "Seven", "url": "https://g.com/7"},
+    ]
+    out = clean_links(items, limit=5)
+    assert len(out) == 5
+    titles = [o["title"] for o in out]
+    assert "Good Article" in titles
+    assert "Another BBC" not in titles                                 # deduped by domain
+    assert not any(t.startswith("http") for t in titles)               # raw-url entry dropped
+    assert "Tokyo International Forum" in titles                        # picked the English segment
+
+
+def test_looks_obscured_detects_cloud_and_canopy():
+    assert looks_obscured("The area is under heavy cloud cover.")
+    assert looks_obscured("A dense canopy hides the ground.")
+    assert not looks_obscured("Clear skies over an urban grid.")
+    assert not looks_obscured("Cloud-free view of the coast.")
+
+
+def test_chip_label_humanises_land_cover():
+    assert chip_label("sparsely vegetated terrain") == "Sparse Vegetation"
+    assert chip_label("forested areas") == "Forest"
+    assert chip_label("urban") == "Urban"
+    assert chip_label("") == ""
 
 
 def test_markers_prettify_kind():

@@ -201,8 +201,10 @@ def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
     seen, out = set(), []
     for el in resp.json().get("elements", []):
         tags = el.get("tags", {})
-        name = tags.get("name")
-        if not name or name in seen or _is_closed(tags, name):
+        native = tags.get("name")
+        # Prefer an English label where OSM has one; keep the native name as a subtitle (E6).
+        name = tags.get("name:en") or native
+        if not name or name in seen or _is_closed(tags, native or name):
             continue
         tag = next((t for t in _POI_TAGS if t in tags), "")
         kind = tags.get(tag, "")
@@ -212,6 +214,7 @@ def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
         center = el.get("center", {})
         out.append({
             "name": name,
+            "native": native if native and native != name else "",
             "tag": tag,
             "kind": kind,
             "lat": el.get("lat", center.get("lat")),

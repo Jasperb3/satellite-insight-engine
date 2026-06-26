@@ -29,7 +29,7 @@
     </div>
     <p class="meta">
       {{ "%.4f"|format(loc.latitude) }}, {{ "%.4f"|format(loc.longitude) }}
-      · zoom {{ r.buffer }} m
+      · ~{{ (r.buffer * 2 / 1000)|round(1) }} km across
     </p>
 
     {% if r.imagery_tier %}
@@ -48,6 +48,9 @@
 
     {% if run_data.image_url %}
       <img class="sat-image" src="{{ run_data.image_url }}" alt="satellite image of {{ loc.display_name }}">
+      {% if v.summary|looks_obscured %}
+        <div class="notice obscured">⚠ Imagery may be partially obscured by cloud or vegetation — analysis reflects limited ground detail.</div>
+      {% endif %}
     {% else %}
       <div class="no-image">No satellite imagery could be retrieved here — the report below is built from map, weather and web context.</div>
     {% endif %}
@@ -65,12 +68,14 @@
         {% if e.elevation_m is not none %}<div class="wstat"><span class="wlabel">⛰ Elevation</span><span class="wval">{{ e.elevation_m|round|int }} m</span></div>{% endif %}
         {% if w.get('forecast_url') %}<a class="wforecast" href="{{ w.forecast_url }}" target="_blank" rel="noopener">Full forecast →</a>{% endif %}
       </div>
+    {% else %}
+      <div class="weatherbar muted small">Weather data not recorded for this run.</div>
     {% endif %}
 
     <h3>From Above</h3>
     <p>{{ v.summary or "No summary produced." }}</p>
     {% if v.land_cover %}
-      <div class="chips">{% for c in v.land_cover %}<span class="chip">{{ c }}</span>{% endfor %}</div>
+      <div class="chips">{% for c in v.land_cover %}<span class="chip">{{ c|chip_label }}</span>{% endfor %}</div>
     {% endif %}
     {% if v.features %}
       <ul class="features">
@@ -88,16 +93,14 @@
 
     <h3>On the Ground</h3>
     {% if e.summary %}<p>{{ e.summary }}</p>{% endif %}
-    {% if e.wikipedia and e.wikipedia.title %}
-      <p><strong>
-        {% if e.wikipedia.url %}<a href="{{ e.wikipedia.url }}" target="_blank" rel="noopener">{{ e.wikipedia.title }}</a>
-        {% else %}{{ e.wikipedia.title }}{% endif %}
-      </strong> — {{ e.wikipedia.extract }}</p>
-    {% endif %}
 
-    {% if e.history %}
-      <h4>🏛 History</h4>
-      <p class="small">{{ e.history }}</p>
+    {% set hist_text = e.history or (e.wikipedia.extract if e.wikipedia else '') %}
+    {% if hist_text or (e.wikipedia and e.wikipedia.title) %}
+      <h4>🏛 History{% if e.wikipedia and e.wikipedia.title %} · {% if e.wikipedia.url %}<a class="src" href="{{ e.wikipedia.url }}" target="_blank" rel="noopener">{{ e.wikipedia.title }}</a>{% else %}{{ e.wikipedia.title }}{% endif %}{% endif %}</h4>
+      {% if hist_text %}
+        {% set head, tail = hist_text|split_sentences(3) %}
+        <p class="small">{{ head }}{% if tail %} <details class="inline-more"><summary>Read more</summary> {{ tail }}</details>{% endif %}</p>
+      {% endif %}
     {% endif %}
 
     {% if e.news_summary or e.news %}
@@ -125,16 +128,17 @@
       <ul class="pois">
         {% for p in e.pois %}
           <li {% if p.lat and p.lon %}class="poi" data-lat="{{ p.lat }}" data-lon="{{ p.lon }}"{% endif %}>
-            {{ p.name }}{% if p.kind %} <span class="muted">({{ p.kind|pretty_kind }})</span>{% endif %}
+            {{ p.name }}{% if p.kind %} <span class="muted">({{ p.kind|pretty_kind }})</span>{% endif %}{% if p.native %} <span class="muted small">· {{ p.native }}</span>{% endif %}
           </li>
         {% endfor %}
       </ul>
     {% endif %}
 
-    {% if e.web %}
+    {% set links = e.web|clean_links(5) %}
+    {% if links %}
       <h4>Further Reading</h4>
       <ul class="weblinks">
-        {% for wl in e.web[:5] %}<li><a href="{{ wl.url }}" target="_blank" rel="noopener">{{ wl.title or wl.url }}</a></li>{% endfor %}
+        {% for wl in links %}<li>{{ wl.title }} <a class="src" href="{{ wl.url }}" target="_blank" rel="noopener">{{ wl.url|domain }}</a></li>{% endfor %}
       </ul>
     {% endif %}
 

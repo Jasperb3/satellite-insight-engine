@@ -9,7 +9,8 @@ from fastapi.templating import Jinja2Templates
 
 from satviz.application import AnalysisService
 from satviz.application.mapping import (
-    domain, is_stale, pretty_kind, pretty_place, pretty_time, relative_age, tier_label,
+    chip_label, clean_links, domain, is_stale, looks_obscured, pretty_kind, pretty_place,
+    pretty_time, relative_age, split_sentences, tier_label,
 )
 from satviz.logging_setup import configure
 from satviz.web.routes import api, pages
@@ -23,6 +24,10 @@ TEMPLATES.env.filters["pretty_time"] = pretty_time
 TEMPLATES.env.filters["tier_label"] = tier_label
 TEMPLATES.env.filters["domain"] = domain
 TEMPLATES.env.filters["pretty_place"] = pretty_place
+TEMPLATES.env.filters["split_sentences"] = split_sentences
+TEMPLATES.env.filters["clean_links"] = clean_links
+TEMPLATES.env.filters["looks_obscured"] = looks_obscured
+TEMPLATES.env.filters["chip_label"] = chip_label
 
 
 def create_app() -> FastAPI:

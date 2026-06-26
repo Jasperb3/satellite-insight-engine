@@ -41,8 +41,11 @@
         {% for run in runs %}
           <li>
             <a href="/?run={{ run.run_id }}" title="{{ run.display_name }}">
-              <img src="{{ run.image_url }}" alt="" loading="lazy" onerror="this.style.display='none'">
-              <span class="run-name">{{ run.display_name }}</span>
+              <span class="run-thumb">
+                <img src="{{ run.image_url }}" alt="" loading="lazy" onerror="this.style.display='none'">
+                {% if run.imagery_date|is_stale %}<span class="stale-badge card-stale" title="Imagery over 90 days old">⚠ stale</span>{% endif %}
+              </span>
+              <span class="run-name">{{ run.display_name|pretty_place }}</span>
               <span class="run-id muted">{{ run.run_id|pretty_time }}</span>
               {% if run.imagery_tier %}<span class="chip run-tier">{{ run.imagery_tier|tier_label }}</span>{% endif %}
             </a>

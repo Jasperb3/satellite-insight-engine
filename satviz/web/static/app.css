@@ -120,6 +120,15 @@ body.busy .loading, .htmx-request #loading, #loading.htmx-request { display: blo
 .stale-badge { margin-left: .4rem; padding: 0 .35rem; border-radius: 4px; font-size: .72rem;
                background: #4a2410; color: #f0b070; border: 1px solid #6b3b1f; }
 
+/* Obscured-imagery banner (E14) */
+.notice.obscured { margin: .5rem 0; padding: .45rem .6rem; border-radius: 6px; font-size: .8rem;
+                   background: #2a2410; color: #e6c878; border: 1px solid #4a3f1f; }
+
+/* Collapsible "Read more" for long History extracts (Q3) */
+details.inline-more { display: inline; }
+details.inline-more summary { display: inline; cursor: pointer; color: var(--accent); }
+details.inline-more[open] summary { display: none; }
+
 /* Satellite-image lightbox (E9) */
 .sat-image { cursor: zoom-in; }
 .lightbox { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.88);
@@ -176,6 +185,8 @@ kbd { background: #0f1115; border: 1px solid #2a2e37; border-bottom-width: 2px; 
 .run-name { font-size: .85rem; line-height: 1.25; max-height: 2.5em; overflow: hidden; }
 .run-id { font-size: .7rem; }
 .run-tier { align-self: flex-start; font-size: .68rem; padding: .1rem .45rem; }
+.run-thumb { position: relative; display: block; }
+.card-stale { position: absolute; top: .35rem; right: .35rem; margin: 0; }
 
 /* Mobile: map full-bleed, sidebar becomes a draggable bottom sheet */
 @media (max-width: 760px) {
