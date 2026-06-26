@@ -26,6 +26,15 @@ def geocode_place(place_name: str) -> Location | None:
     )
 
 
+def _approximate_if_generic(display: str) -> str:
+    """Country/region-only reverse results (e.g. "Australia" for a point in the Great Barrier
+    Reef) carry no comma-separated detail. Mark them approximate so the title doesn't imply
+    a precise address (B7)."""
+    if "," in display:
+        return display
+    return f"{display} (approx.)"
+
+
 def reverse_geocode(latitude: float, longitude: float) -> Location:
     """Build a Location for coordinates, filling display_name via reverse geocoding."""
     try:
@@ -33,7 +42,8 @@ def reverse_geocode(latitude: float, longitude: float) -> Location:
         raw = result.raw if result else {}
         # Nominatim returns nothing over open water / remote areas — label honestly rather
         # than "not found" so downstream grounding treats it as a real, sparse location.
-        display = raw.get("display_name") or "Open water or remote area"
+        display = raw.get("display_name")
+        display = _approximate_if_generic(display) if display else "Open water or remote area"
     except Exception as exc:  # network/service errors shouldn't kill the run
         raw = {"error": str(exc)}
         display = "Open water or remote area"

@@ -7,6 +7,8 @@ let priorView = null;  // framing to return to after a POI fly-in
 let imageOverlay = null;  // current captured-image overlay (E4)
 let currentJobId = null;  // in-flight analysis job (E1/E2)
 let pollTimer = null;
+let lastSurpriseIdx = -1;  // avoid repeating the same Surprise back-to-back (B8)
+let flyToken = 0;          // guards fly-then-snapshot against intervening pans (B9)
 const POLL_MS = 1200;
 const STAGE_ORDER = ["imagery", "vision", "enrichment", "report"];
 const markerLayer = L.layerGroup();
@@ -14,24 +16,25 @@ const markerLayer = L.layerGroup();
 // Geographic bounds of the analysed square: buffer_m on each side of the centre (E4).
 function viewportBounds(vp) {
   const dLat = vp.buffer_m / 111320;
-  const dLon = vp.buffer_m / (111320 * Math.cos((vp.latitude * Math.PI) / 180));
+  // Clamp the cosine so the longitude span stays finite near the poles (E13).
+  const dLon = vp.buffer_m / (111320 * Math.max(Math.cos((vp.latitude * Math.PI) / 180), 0.01));
   return [[vp.latitude - dLat, vp.longitude - dLon], [vp.latitude + dLat, vp.longitude + dLon]];
 }
 
-// [lat, lng, zoom] for the 🎲 Surprise button (E7).
+// [lat, lng, zoom, name] for the 🎲 Surprise button (E7/E14).
 const SURPRISE_PLACES = [
-  [29.9792, 31.1342, 16],   // Pyramids of Giza
-  [48.8584, 2.2945, 16],    // Eiffel Tower
-  [27.1751, 78.0421, 17],   // Taj Mahal
-  [-13.1631, -72.5450, 16], // Machu Picchu
-  [41.8902, 12.4922, 17],   // Colosseum
-  [-33.8568, 151.2153, 17], // Sydney Opera House
-  [37.8267, -122.4233, 15], // Alcatraz Island
-  [51.1789, -1.8262, 17],   // Stonehenge
-  [40.4319, 116.5704, 15],  // Great Wall (Mutianyu)
-  [-22.9519, -43.2105, 16], // Christ the Redeemer
-  [64.1466, -21.9426, 14],  // Reykjavík
-  [25.1972, 55.2744, 16],   // Burj Khalifa
+  [29.9792, 31.1342, 16, "Pyramids of Giza"],
+  [48.8584, 2.2945, 16, "Eiffel Tower"],
+  [27.1751, 78.0421, 17, "Taj Mahal"],
+  [-13.1631, -72.5450, 16, "Machu Picchu"],
+  [41.8902, 12.4922, 17, "Colosseum"],
+  [-33.8568, 151.2153, 17, "Sydney Opera House"],
+  [37.8267, -122.4233, 15, "Alcatraz Island"],
+  [51.1789, -1.8262, 17, "Stonehenge"],
+  [40.4319, 116.5704, 15, "Great Wall (Mutianyu)"],
+  [-22.9519, -43.2105, 16, "Christ the Redeemer"],
+  [64.1466, -21.9426, 14, "Reykjavík"],
+  [25.1972, 55.2744, 16, "Burj Khalifa"],
 ];
 
 function resetView() {
@@ -107,20 +110,41 @@ function reportError(title, detail) {
     `<div class="error"><strong>${title}</strong><p>${detail}</p></div>`;
 }
 
-async function snapshot() {
-  const c = map.getCenter();
-  // Warn before committing ~2 minutes to a point that reverse-geocodes to open water (E12).
+// Resolve a non-blocking open-water confirmation via the in-panel modal (B5/E11):
+// resolves true to proceed, false to abort. Replaces the fragile, thread-blocking confirm().
+function confirmOpenWater() {
+  const modal = document.getElementById("openwater-modal");
+  modal.classList.remove("hidden");
+  return new Promise((resolve) => {
+    const yes = modal.querySelector("#ow-confirm");
+    const no = modal.querySelector("#ow-cancel");
+    const done = (val) => {
+      modal.classList.add("hidden");
+      yes.removeEventListener("click", onYes);
+      no.removeEventListener("click", onNo);
+      resolve(val);
+    };
+    const onYes = () => done(true);
+    const onNo = () => done(false);
+    yes.addEventListener("click", onYes);
+    no.addEventListener("click", onNo);
+  });
+}
+
+// Analyse a point. `target` ([lat, lng]) pins the location for fly-then-snapshot so an
+// intervening pan can't redirect it (B9); without it the current map centre is used.
+async function snapshot(target) {
+  const c = target ? { lat: target[0], lng: target[1] } : map.getCenter();
+  // Warn before committing ~2 minutes to a point that reverse-geocodes to open water (B5).
   try {
     const r = await fetch(`/api/reverse?latitude=${c.lat}&longitude=${c.lng}`);
     if (r.ok) {
       const info = await r.json();
-      if (!info.located &&
-          !confirm("This looks like open water or a remote area with little to analyse. Capture anyway?")) {
-        return;
-      }
+      if (!info.located && !(await confirmOpenWater())) return;
     }
   } catch { /* reverse check is best-effort; proceed if it fails */ }
 
+  document.getElementById("panel").scrollTop = 0;  // keep progress/cancel in view (B4)
   setLoading(true);
   setStage("imagery");
   try {
@@ -169,6 +193,12 @@ async function loadRun(runId) {
     const resp = await fetch(`/api/run/${encodeURIComponent(runId)}`);
     document.getElementById("report").innerHTML = await resp.text();
     applyMarkers({ recenter: true });
+    // Reflect what was loaded in the search field so users know where they are (E5).
+    const el = document.getElementById("run-data");
+    if (el) {
+      try { document.getElementById("place").value = JSON.parse(el.textContent).viewport?.display_name ?? ""; }
+      catch { /* leave field as-is */ }
+    }
   } catch (err) {
     document.getElementById("report").innerHTML =
       `<div class="error"><strong>Could not load run</strong><p>${err}</p></div>`;
@@ -229,17 +259,64 @@ function applyMarkers({ recenter = false } = {}) {
   // Captured-image overlay at its true geographic bounds (E4).
   if (imageOverlay) { map.removeLayer(imageOverlay); imageOverlay = null; }
   const toggle = document.getElementById("toggle-overlay");
+  const slider = document.getElementById("overlay-opacity");
   if (data.image_url) {
-    imageOverlay = L.imageOverlay(data.image_url, viewportBounds(vp), { opacity: 0.65 }).addTo(map);
+    imageOverlay = L.imageOverlay(data.image_url, viewportBounds(vp),
+                                  { opacity: parseFloat(slider.value) }).addTo(map);
     toggle.classList.remove("hidden");
     toggle.classList.add("active");
+    slider.classList.remove("hidden");
+    setOverlayLabel(true);
   } else {
     toggle.classList.add("hidden");
+    slider.classList.add("hidden");
   }
 }
 
+// Reflect overlay visibility in the toggle's label so its state is unambiguous (E3).
+function setOverlayLabel(on) {
+  document.getElementById("toggle-overlay").textContent = on ? "🛰 Overlay on" : "🛰 Overlay off";
+}
+
+// Fly to a target and snapshot it once the camera lands. The token guards against an
+// intervening pan/fly firing the snapshot for the wrong place (B9); the explicit target
+// coords are passed straight through so the analysed point is always the intended one.
+function flyThenSnapshot(lat, lng, zoom, name) {
+  if (name) document.getElementById("place").value = name;
+  const token = ++flyToken;
+  map.flyTo([lat, lng], zoom, { duration: 0.8 });
+  map.once("moveend", () => { if (token === flyToken) snapshot([lat, lng]); });
+}
+
+// Pick a famous place at random, never repeating the last one (B8), then fly + snapshot.
+function triggerSurprise() {
+  if (document.body.classList.contains("busy")) return;
+  let idx;
+  do { idx = Math.floor(Math.random() * SURPRISE_PLACES.length); }
+  while (SURPRISE_PLACES.length > 1 && idx === lastSurpriseIdx);
+  lastSurpriseIdx = idx;
+  const [lat, lng, zoom, name] = SURPRISE_PLACES[idx];
+  flyThenSnapshot(lat, lng, zoom, name);
+}
+
+// Pick a truly random point and keep trying until one lands on (reverse-geocodable) land (E2).
+async function surpriseRandom() {
+  if (document.body.classList.contains("busy")) return;
+  const status = document.getElementById("status-line");
+  if (status) status.textContent = "🌍 Finding a random spot on land…";
+  for (let i = 0; i < 8; i++) {
+    const lat = Math.random() * 126 - 56;   // ~ -56°..70°, biased to inhabited latitudes
+    const lng = Math.random() * 360 - 180;
+    try {
+      const info = await (await fetch(`/api/reverse?latitude=${lat}&longitude=${lng}`)).json();
+      if (info.located) { flyThenSnapshot(lat, lng, 13, info.display_name); return; }
+    } catch { /* try another point */ }
+  }
+  if (status) status.textContent = "Couldn't find land — press 🌍 to try again.";
+}
+
 function wireControls() {
-  document.getElementById("snapshot").addEventListener("click", snapshot);
+  document.getElementById("snapshot").addEventListener("click", () => snapshot());
 
   // ✕ Cancel an in-flight analysis (E2): stop polling and tell the server to abort.
   document.getElementById("cancel-snapshot").addEventListener("click", () => {
@@ -273,21 +350,24 @@ function wireControls() {
   });
   document.getElementById("reset-view").addEventListener("click", resetView);
 
-  // 🛰 Toggle the captured-image overlay on the map (E4).
+  // 🛰 Toggle the captured-image overlay on the map (E3/E4).
   document.getElementById("toggle-overlay").addEventListener("click", (ev) => {
     if (!imageOverlay) return;
-    const showing = map.hasLayer(imageOverlay);
-    if (showing) map.removeLayer(imageOverlay); else imageOverlay.addTo(map);
-    ev.currentTarget.classList.toggle("active", !showing);
+    const willShow = !map.hasLayer(imageOverlay);
+    if (willShow) imageOverlay.addTo(map); else map.removeLayer(imageOverlay);
+    ev.currentTarget.classList.toggle("active", willShow);
+    setOverlayLabel(willShow);
   });
 
-  // 🎲 Surprise: fly to a random famous place and analyse it (E7).
-  document.getElementById("surprise-btn").addEventListener("click", () => {
-    if (document.body.classList.contains("busy")) return;
-    const [lat, lng, zoom] = SURPRISE_PLACES[Math.floor(Math.random() * SURPRISE_PLACES.length)];
-    map.once("moveend", snapshot);
-    map.flyTo([lat, lng], zoom, { duration: 0.8 });
+  // Blend the satellite overlay against the basemap (E1).
+  document.getElementById("overlay-opacity").addEventListener("input", (ev) => {
+    if (imageOverlay) imageOverlay.setOpacity(parseFloat(ev.currentTarget.value));
   });
+
+  // 🎲 Surprise: fly to a random famous place and analyse it (E14).
+  document.getElementById("surprise-btn").addEventListener("click", triggerSurprise);
+  // 🌍 Random: fly to a random point that's actually on land, then analyse it (E2).
+  document.getElementById("random-btn").addEventListener("click", surpriseRandom);
 
   // ⌨ Keyboard-shortcut help modal (E11).
   const helpModal = document.getElementById("help-modal");
@@ -320,6 +400,7 @@ function wireControls() {
     else if (key === "d") map.panBy([size.x * 0.3, 0]);
     else if (key === "z") map.zoomIn();
     else if (key === "x") map.zoomOut();
+    else if (key === "r") triggerSurprise();
     else if (key === "enter" && !document.body.classList.contains("busy")) snapshot();
   });
 

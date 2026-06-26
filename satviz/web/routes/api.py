@@ -1,8 +1,10 @@
 """API / fragment routes. Action endpoints return the rendered report partial (HTMX or
 JS swaps it into the panel); the partial embeds the run-data the map JS reads."""
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+import os
+
+from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
 from satviz.application import AnalysisResult
 from satviz.application.mapping import run_data
@@ -83,3 +85,18 @@ def analyze_cancel(request: Request, job_id: str):
 @router.get("/run/{run_id}")
 def get_run(request: Request, run_id: str):
     return _render(request, _service(request).get_run(run_id))
+
+
+_EXPORT_MEDIA = {"md": "text/markdown", "json": "application/json"}
+
+
+@router.get("/run/{run_id}/export")
+def export_run(request: Request, run_id: str, format: str = "md"):
+    """Download a saved run's report as Markdown or JSON (E9)."""
+    if format not in _EXPORT_MEDIA:
+        raise HTTPException(status_code=400, detail="format must be md or json")
+    path = _service(request).export_path_for(run_id, format)
+    if not path or not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="Export not found")
+    return FileResponse(path, media_type=_EXPORT_MEDIA[format],
+                        filename=f"{run_id}.{ 'report.md' if format == 'md' else 'json' }")

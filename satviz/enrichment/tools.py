@@ -133,6 +133,19 @@ _POI_TAGS = ["aeroway", "harbour", "man_made", "leisure", "natural", "landuse", 
 # Signage and generic markers add noise rather than insight; rank them last.
 _DEMOTED_KINDS = {"information", "guidepost", "artwork", "yes"}
 
+# Dead businesses leak into OSM via closure phrases in the name or lifecycle-prefixed
+# tags. Drop them so the POI list reflects what's actually there (B6).
+_CLOSED_NAME_RE = re.compile(r"fechad|closed|encerrad|fermé|ferme|geschlossen|cerrad",
+                             re.IGNORECASE)
+_CLOSED_TAG_PREFIXES = ("disused:", "abandoned:", "razed:", "demolished:", "removed:")
+
+
+def _is_closed(tags: dict, name: str) -> bool:
+    """True if an OSM feature reads as permanently closed / no longer present."""
+    if _CLOSED_NAME_RE.search(name):
+        return True
+    return any(k.startswith(_CLOSED_TAG_PREFIXES) for k in tags)
+
 
 def _poi_rank(poi: dict) -> int:
     """Lower sorts first. Substantive features rank above tourist signage."""
@@ -168,7 +181,7 @@ def nearby_pois(latitude: float, longitude: float, radius_m: int = 1500,
     for el in resp.json().get("elements", []):
         tags = el.get("tags", {})
         name = tags.get("name")
-        if not name or name in seen:
+        if not name or name in seen or _is_closed(tags, name):
             continue
         seen.add(name)
         tag = next((t for t in _POI_TAGS if t in tags), "")

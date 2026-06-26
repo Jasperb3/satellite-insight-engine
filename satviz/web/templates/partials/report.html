@@ -17,8 +17,14 @@
     <div class="report-head">
       <h2>{{ loc.display_name }}</h2>
       {% if result.run_id %}
-        <button type="button" class="copy-link secondary" data-run-id="{{ result.run_id }}"
-                title="Copy a link to this run">🔗 Copy link</button>
+        <div class="report-actions">
+          <button type="button" class="copy-link secondary" data-run-id="{{ result.run_id }}"
+                  title="Copy a link to this run">🔗 Copy link</button>
+          <span class="export-links small">
+            ⬇ <a href="/api/run/{{ result.run_id }}/export?format=md" download>MD</a>
+            · <a href="/api/run/{{ result.run_id }}/export?format=json" download>JSON</a>
+          </span>
+        </div>
       {% endif %}
     </div>
     <p class="meta">
@@ -72,8 +78,9 @@
         {% for f in v.features %}
           <li><span class="feat-name">{{ f.name }}</span>
             {% if f.confidence %}
-              <span class="bar"><span class="bar-fill" style="width: {{ (f.confidence * 100)|round }}%"></span></span>
-              <span class="muted">{{ (f.confidence * 100)|round }}%</span>
+              {% set pct = (f.confidence * 100)|round %}
+              <span class="bar"><span class="bar-fill {{ 'hi' if pct >= 80 else 'mid' if pct >= 50 else 'lo' }}" style="width: {{ pct }}%"></span></span>
+              <span class="muted">{{ pct }}%</span>
             {% endif %}
           </li>
         {% endfor %}

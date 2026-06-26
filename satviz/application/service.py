@@ -152,6 +152,15 @@ class AnalysisService:
     def image_path_for(self, run_id: str) -> str | None:
         return Storage.find_image(Storage.resolve_run_dir(run_id))
 
+    def export_path_for(self, run_id: str, fmt: str) -> str | None:
+        """On-disk path of a run's exportable artifact (md|json), or None (E9)."""
+        run_dir = Storage.resolve_run_dir(run_id)
+        if fmt == "md":
+            return Storage.find_report_md(run_dir)
+        if fmt == "json":
+            return Storage.find_report_json(run_dir)
+        return None
+
     def list_runs(self, limit: int = 20, offset: int = 0, query: str = "",
                   tier: str = "") -> tuple[list[dict], int]:
         """A page of saved runs (newest first) and the total matching count, from the index.

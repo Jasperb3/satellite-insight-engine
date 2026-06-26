@@ -42,6 +42,25 @@ def image_url(run_id: str) -> str:
     return f"/asset/{run_id}/image"
 
 
+def pretty_time(run_id: str) -> str:
+    """Friendly date/time for a run_id like '2026-06-25_212427' -> 'Jun 25, 2026 · 21:24'."""
+    try:
+        day, _, tod = run_id.partition("_")
+        dt = datetime.strptime(f"{day} {tod[:6]}", "%Y-%m-%d %H%M%S")
+    except (ValueError, IndexError):
+        return run_id
+    return dt.strftime("%b %-d, %Y · %H:%M")
+
+
+# Imagery-tier labels for history filter chips (E15).
+_TIER_LABELS = {"none": "No imagery", "regional": "Regional"}
+
+
+def tier_label(tier: str) -> str:
+    """Human label for an imagery tier (e.g. 'none' -> 'No imagery')."""
+    return _TIER_LABELS.get(tier, tier)
+
+
 # OSM tag values that don't title-case cleanly. Everything else falls back to
 # turning "post_office" -> "Post Office".
 _KIND_OVERRIDES = {
@@ -112,6 +131,7 @@ def run_data(run_id: str, report: dict) -> dict:
             "latitude": loc.get("latitude"),
             "longitude": loc.get("longitude"),
             "buffer_m": report.get("buffer"),
+            "display_name": loc.get("display_name"),
         },
         "markers": markers_from_report(report),
     }

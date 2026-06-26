@@ -2,7 +2,8 @@ from datetime import date, timedelta
 
 from satviz.application.cache import ResultCache, viewport_key
 from satviz.application.mapping import (
-    is_stale, markers_from_report, pretty_kind, relative_age, run_data,
+    is_stale, markers_from_report, pretty_kind, pretty_time, relative_age, run_data,
+    tier_label,
 )
 from satviz.application.service import AnalysisService
 
@@ -29,6 +30,20 @@ def test_markers_skip_pois_without_coordinates():
     ]}}
     markers = markers_from_report(report)
     assert [m["name"] for m in markers] == ["A"]
+
+
+def test_pretty_time_formats_run_id():
+    assert pretty_time("2026-06-25_212427") == "Jun 25, 2026 · 21:24"
+
+
+def test_pretty_time_passthrough_on_garbage():
+    assert pretty_time("not-a-run-id") == "not-a-run-id"
+
+
+def test_tier_label_maps_known_tiers():
+    assert tier_label("none") == "No imagery"
+    assert tier_label("regional") == "Regional"
+    assert tier_label("sentinel-2") == "sentinel-2"  # unknown -> unchanged
 
 
 def test_pretty_kind_humanises_osm_values():
@@ -78,7 +93,8 @@ def test_run_data_shape():
               "image_path": "x.jpg", "enrichment": {"pois": []}}
     data = run_data("2026-06-25_120000", report)
     assert data["image_url"] == "/asset/2026-06-25_120000/image"
-    assert data["viewport"] == {"latitude": 51.0, "longitude": -1.0, "buffer_m": 1500}
+    assert data["viewport"] == {"latitude": 51.0, "longitude": -1.0, "buffer_m": 1500,
+                                "display_name": None}
 
 
 def test_run_data_no_image_when_missing():

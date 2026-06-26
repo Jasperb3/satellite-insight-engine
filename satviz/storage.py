@@ -53,6 +53,15 @@ class Storage:
                 return os.path.join(run_dir, name)
         return None
 
+    @staticmethod
+    def find_report_md(run_dir: str) -> str | None:
+        if not os.path.isdir(run_dir):
+            return None
+        for name in sorted(os.listdir(run_dir)):
+            if name.endswith(".report.md"):
+                return os.path.join(run_dir, name)
+        return None
+
     def path_for(self, latitude: float, longitude: float, buffer: int) -> str:
         """Output path for a fetched image within this run's folder."""
         return os.path.join(self.run_dir, f"{latitude:.4f}-{longitude:.4f}-{buffer}m.jpg")

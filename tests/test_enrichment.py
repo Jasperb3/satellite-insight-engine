@@ -88,3 +88,22 @@ def test_area_history_strips_section_headers(monkeypatch):
     result = tools.area_history("Some Hotel")
     assert "==" not in result
     assert result == "Built in 1925. It is tall."
+
+
+def _overpass_resp(elements):
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self): return {"elements": elements}
+    return _Resp()
+
+
+def test_nearby_pois_drops_closed_businesses(monkeypatch):
+    elements = [
+        {"lat": 1.0, "lon": 2.0, "tags": {"name": "Live Cafe", "amenity": "cafe"}},
+        {"lat": 1.0, "lon": 2.0, "tags": {"name": "Galeto Mania (permanentemente fechado)",
+                                          "amenity": "restaurant"}},
+        {"lat": 1.0, "lon": 2.0, "tags": {"name": "Old Shop", "disused:shop": "supermarket"}},
+    ]
+    monkeypatch.setattr(tools, "_overpass_request", lambda q: _overpass_resp(elements))
+    names = [p["name"] for p in tools.nearby_pois(0.0, 0.0)]
+    assert names == ["Live Cafe"]

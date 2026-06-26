@@ -33,6 +33,8 @@ main { flex: 1; display: flex; min-height: 0; }
 .report-head { display: flex; align-items: flex-start; gap: .6rem; margin: .2rem 0; }
 .report h2 { font-size: 1.1rem; margin: 0; flex: 1; }
 .copy-link { white-space: nowrap; padding: .3rem .55rem; font-size: .78rem; align-self: center; }
+.report-actions { display: flex; flex-direction: column; align-items: flex-end; gap: .25rem; }
+.export-links { color: var(--muted); white-space: nowrap; }
 .meta { color: var(--muted); font-size: .85rem; margin: 0 0 .8rem; }
 .sat-image { width: 100%; border-radius: 8px; margin-bottom: .8rem; }
 .chips { display: flex; flex-wrap: wrap; gap: .35rem; margin: .4rem 0; }
@@ -42,6 +44,10 @@ main { flex: 1; display: flex; min-height: 0; }
 .feat-name { flex: 1; }
 .bar { width: 70px; height: 6px; background: #2a2e37; border-radius: 3px; overflow: hidden; }
 .bar-fill { display: block; height: 100%; background: var(--accent); }
+/* Colour-code confidence so uncertainty is scannable (E10). */
+.bar-fill.hi { background: #5fb37a; }
+.bar-fill.mid { background: #d9b54a; }
+.bar-fill.lo { background: #d96a5a; }
 .pois, .weblinks { padding-left: 1.1rem; font-size: .88rem; }
 .poi { cursor: pointer; }
 .poi:hover { color: var(--accent); }
@@ -117,6 +123,12 @@ body.busy .loading, .htmx-request #loading, #loading.htmx-request { display: blo
 .lightbox { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.88);
             display: flex; align-items: center; justify-content: center; cursor: zoom-out; padding: 2rem; }
 .lightbox img { max-width: 95%; max-height: 95%; border-radius: 8px; }
+.lightbox-close { position: absolute; top: 1rem; right: 1.2rem; background: rgba(26,29,36,.9);
+                  border: 1px solid #2a2e37; font-size: 1.1rem; line-height: 1; padding: .4rem .6rem;
+                  border-radius: 8px; cursor: pointer; }
+
+/* Overlay opacity slider (E1) */
+#overlay-opacity { width: 90px; accent-color: var(--accent); }
 
 /* Modal (keyboard help, E11) */
 .modal { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,.6);
@@ -124,6 +136,7 @@ body.busy .loading, .htmx-request #loading, #loading.htmx-request { display: blo
 .modal-card { background: var(--panel); border: 1px solid #2a2e37; border-radius: 12px;
               padding: 1.4rem 1.6rem; max-width: 360px; width: 90%; }
 .modal-card h2 { margin: 0 0 .8rem; font-size: 1.05rem; }
+.modal-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: 1rem; }
 .shortcuts { list-style: none; padding: 0; margin: 0 0 1rem; }
 .shortcuts li { display: flex; align-items: center; gap: .4rem; margin: .5rem 0; font-size: .9rem; }
 .shortcuts li span { margin-left: auto; color: var(--muted); }
@@ -136,7 +149,8 @@ kbd { background: #0f1115; border: 1px solid #2a2e37; border-bottom-width: 2px; 
 
 /* History page */
 .history-page { display: block; height: auto; }
-.history-main { padding: 1.5rem; }
+/* Override the global `main { flex:1; display:flex }` so history lays out vertically (B1). */
+.history-main { display: block; padding: 1.5rem; }
 .back-link { margin-left: auto; color: var(--accent); text-decoration: none; }
 .history-controls { display: flex; gap: .5rem; align-items: center; margin-bottom: .8rem; }
 .history-controls input[type="search"] { flex: 1; max-width: 360px; padding: .5rem .7rem;
@@ -159,6 +173,7 @@ kbd { background: #0f1115; border: 1px solid #2a2e37; border-bottom-width: 2px; 
 .run-gallery img { width: 100%; height: 130px; object-fit: cover; border-radius: 6px; background: #11141a; }
 .run-name { font-size: .85rem; line-height: 1.25; max-height: 2.5em; overflow: hidden; }
 .run-id { font-size: .7rem; }
+.run-tier { align-self: flex-start; font-size: .68rem; padding: .1rem .45rem; }
 
 /* Mobile: map full-bleed, sidebar becomes a draggable bottom sheet */
 @media (max-width: 760px) {

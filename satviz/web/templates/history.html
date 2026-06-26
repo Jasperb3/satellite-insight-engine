@@ -26,7 +26,7 @@
         <a class="chip {% if not tier %}on{% endif %}" href="/history{% if q %}?q={{ q }}{% endif %}">All</a>
         {% for t in tiers %}
           <a class="chip {% if tier == t %}on{% endif %}"
-             href="/history?tier={{ t }}{% if q %}&q={{ q }}{% endif %}">{{ t }}</a>
+             href="/history?tier={{ t }}{% if q %}&q={{ q }}{% endif %}">{{ t|tier_label }}</a>
         {% endfor %}
       </div>
     {% endif %}
@@ -43,7 +43,8 @@
             <a href="/?run={{ run.run_id }}" title="{{ run.display_name }}">
               <img src="{{ run.image_url }}" alt="" loading="lazy" onerror="this.style.display='none'">
               <span class="run-name">{{ run.display_name }}</span>
-              <span class="run-id muted">{{ run.run_id }}</span>
+              <span class="run-id muted">{{ run.run_id|pretty_time }}</span>
+              {% if run.imagery_tier %}<span class="chip run-tier">{{ run.imagery_tier|tier_label }}</span>{% endif %}
             </a>
           </li>
         {% endfor %}
@@ -75,11 +76,16 @@
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19, attribution: "© OpenStreetMap contributors",
       }).addTo(hmap);
-      const group = L.featureGroup(pts.map((p) =>
-        L.marker([p.latitude, p.longitude]).bindPopup(
-          `<a href="/?run=${encodeURIComponent(p.run_id)}">${p.display_name}</a>`)
-      )).addTo(hmap);
+      const group = L.featureGroup(pts.map((p) => {
+        const href = `/?run=${encodeURIComponent(p.run_id)}`;
+        // Popup for desktop hover/click; direct navigation so a single tap works on touch (E8).
+        return L.marker([p.latitude, p.longitude])
+          .bindPopup(`<a href="${href}">${p.display_name}</a>`)
+          .on("click", () => { location.href = href; });
+      })).addTo(hmap);
       hmap.fitBounds(group.getBounds().pad(0.2), { maxZoom: 12 });
+      // The map div has no width until the column layout settles; remeasure (B2).
+      requestAnimationFrame(() => hmap.invalidateSize());
     </script>
   {% endif %}
 </body>

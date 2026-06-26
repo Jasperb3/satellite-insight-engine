@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from satviz.application import AnalysisService
-from satviz.application.mapping import is_stale, pretty_kind, relative_age
+from satviz.application.mapping import is_stale, pretty_kind, pretty_time, relative_age, tier_label
 from satviz.logging_setup import configure
 from satviz.web.routes import api, pages
 
@@ -17,6 +17,8 @@ TEMPLATES = Jinja2Templates(directory=os.path.join(_HERE, "templates"))
 TEMPLATES.env.filters["pretty_kind"] = pretty_kind
 TEMPLATES.env.filters["relative_age"] = relative_age
 TEMPLATES.env.filters["is_stale"] = is_stale
+TEMPLATES.env.filters["pretty_time"] = pretty_time
+TEMPLATES.env.filters["tier_label"] = tier_label
 
 
 def create_app() -> FastAPI:

@@ -16,7 +16,8 @@
       <button type="submit" class="secondary">Go</button>
     </form>
     <button id="snapshot" type="button" title="Analyse the current view (Enter)">📸 Snapshot</button>
-    <button id="surprise-btn" type="button" class="secondary" title="Fly to a random famous place and analyse it">🎲 Surprise</button>
+    <button id="surprise-btn" type="button" class="secondary" title="Fly to a random famous place and analyse it (R)">🎲 Surprise</button>
+    <button id="random-btn" type="button" class="secondary" title="Fly to a random point on land and analyse it">🌍 Random</button>
     <button id="history-btn" type="button" class="secondary" title="Browse past runs">🕘 History</button>
     <button id="help-btn" type="button" class="secondary" title="Keyboard shortcuts">⌨</button>
   </header>
@@ -33,7 +34,9 @@
         </div>
         <div class="readout">
           <span id="status-line" class="muted">Pan/zoom to frame a view, then Snapshot.</span>
-          <button id="toggle-overlay" type="button" class="hidden" title="Show/hide the captured image on the map">🛰 Overlay</button>
+          <button id="toggle-overlay" type="button" class="hidden" title="Show/hide the captured image on the map">🛰 Overlay on</button>
+          <input id="overlay-opacity" class="hidden" type="range" min="0" max="1" step="0.05" value="0.65"
+                 title="Overlay opacity" aria-label="Overlay opacity">
           <button id="reset-view" type="button" class="hidden">↩ Reset view</button>
         </div>
       </div>
@@ -56,16 +59,33 @@
   </main>
 
   <!-- Fullscreen lightbox for the satellite image (E9). -->
-  <div id="lightbox" class="lightbox hidden"><img alt="satellite image enlarged"></div>
+  <div id="lightbox" class="lightbox hidden">
+    <button type="button" class="lightbox-close" title="Close (Esc)" aria-label="Close">✕</button>
+    <img alt="satellite image enlarged">
+  </div>
 
-  <!-- Keyboard shortcut help (E11). -->
+  <!-- Open-water capture warning (B5/E11): a non-blocking modal in place of confirm(). -->
+  <div id="openwater-modal" class="modal hidden">
+    <div class="modal-card">
+      <h2>⚠️ Open water</h2>
+      <p>This looks like open water or a remote area with little to analyse. Capture anyway?</p>
+      <div class="modal-actions">
+        <button type="button" id="ow-cancel" class="secondary">Cancel</button>
+        <button type="button" id="ow-confirm">Capture anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard shortcut help (E11/E12). -->
   <div id="help-modal" class="modal hidden">
     <div class="modal-card">
       <h2>Keyboard shortcuts</h2>
       <ul class="shortcuts">
         <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>Pan the map</span></li>
         <li><kbd>Z</kbd> / <kbd>X</kbd> <span>Zoom in / out</span></li>
+        <li><kbd>R</kbd> <span>Surprise me</span></li>
         <li><kbd>Enter</kbd> <span>Snapshot the current view</span></li>
+        <li><kbd>Esc</kbd> <span>Close dialogs</span></li>
       </ul>
       <button type="button" class="modal-close secondary">Close</button>
     </div>
