@@ -1,6 +1,16 @@
 """Merge a VisionInsight and an Enrichment into a Report, and render a readable report.md."""
 
+from urllib.parse import urlsplit
+
 from satviz.models import Enrichment, ImageResult, Report, VisionInsight
+
+
+def _domain(url: str) -> str:
+    """Bare host of a URL for a compact source label ('https://www.ap.org/x' -> 'ap.org')."""
+    if not url:
+        return "source"
+    host = urlsplit(url if "//" in url else "//" + url).netloc.split(":")[0]
+    return host[4:] if host.startswith("www.") else host or "source"
 
 
 def build_report(image: ImageResult, vision: VisionInsight, enrichment: Enrichment) -> Report:
@@ -99,14 +109,23 @@ def render_markdown(report: Report) -> str:
             lines.append(e.news_summary)
             lines.append("")
         for item in e.news[:5]:
-            lines.append(f"- [{item.get('title', 'source')}]({item.get('url', '')})")
+            url = item.get("url", "")
+            lines.append(f"- {item.get('title', 'source')} — [{_domain(url)}]({url})")
         lines.append("")
     if e.events:
         lines.append("**Active natural events nearby:**")
         lines.append("")
         for ev in e.events[:6]:
-            meta = " · ".join(x for x in [ev.get("category", ""), ev.get("date", "")] if x)
-            lines.append(f"- [{ev.get('title', 'event')}]({ev.get('url', '')}) — {meta}")
+            title = ev.get("title", "event")
+            category = ev.get("category", "")
+            parts = [title]
+            if category and category[:4].lower() not in title.lower():
+                parts.append(category)
+            if ev.get("date"):
+                parts.append(ev["date"])
+            meta = " · ".join(parts)
+            url = ev.get("url", "")
+            lines.append(f"- {meta}" + (f" ([details]({url}))" if url else ""))
         lines.append("")
     if e.web:
         lines.append("**Further Reading:**")

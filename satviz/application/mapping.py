@@ -1,9 +1,39 @@
 """Map an engine Report (as a dict) into the browser-facing shapes: the map's run-data
 payload (viewport, markers, image url) and the context the report template renders."""
 
+import re
 from datetime import date, datetime
+from urllib.parse import urlsplit
 
 _STALE_DAYS = 90
+
+
+def domain(url: str) -> str:
+    """Bare host of a URL for display as a source label, e.g.
+    'https://www.ap.org/world/x' -> 'ap.org'. Empty for missing/garbage input."""
+    if not url:
+        return ""
+    host = urlsplit(url if "//" in url else "//" + url).netloc
+    host = host.split("@")[-1].split(":")[0]
+    return host[4:] if host.startswith("www.") else host
+
+
+# Address fragments that are pure numbers/punctuation (house numbers, postcodes).
+_NUMERIC_PART = re.compile(r"^[\d\s\-/]+$")
+
+
+def pretty_place(display_name: str) -> str:
+    """Shorten a raw geocoder display name to a readable title: drop house-number and
+    postcode fragments, and for long addresses keep the most-specific part plus the
+    region/country tail (e.g. '…Forum, 1, Marunouchi 3, Chiyoda, Tokyo, 100-0005, Japan'
+    -> '…Forum, Tokyo, Japan'). The full name is kept for a tooltip elsewhere."""
+    if not display_name:
+        return ""
+    parts = [p.strip() for p in display_name.split(",") if p.strip()]
+    meaningful = [p for p in parts if not _NUMERIC_PART.match(p)]
+    if len(meaningful) <= 3:
+        return ", ".join(meaningful) or display_name.strip()
+    return ", ".join([meaningful[0], *meaningful[-2:]])
 
 
 def _days_old(date_str: str):

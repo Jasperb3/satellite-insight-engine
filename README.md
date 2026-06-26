@@ -88,23 +88,38 @@ python main.py --gui --port 9000     # custom port
 **CLI** controls during a session: `W/A/S/D` move, `Z/X` zoom in/out, `Q` quit.
 
 **Browser GUI** (FastAPI + Leaflet + HTMX): pan/zoom the map freely (instant), then press
-**📸 Snapshot** to analyse the framed view — the capture area is derived from what's visible
-(zoom in for sharper, narrower; zoom out for wider regional context). Arrows / `W A S D` pan,
-native zoom + pinch zoom, `Enter` snapshots; the **⌨ help** button lists shortcuts. The
-snapshot runs as a background job with a **live per-stage progress** panel
-(imagery → vision → enrichment → report) and a **✕ Cancel** button. The report renders in a
-side panel: an imagery **provenance badge** (satellite tier + resolution, plus a relative age
-and a *stale* warning past 90 days), a **weather bar**, the AI reading, nearby POIs (click to
-fly in, then **Reset view**), recent **news**, **history**, active **natural events**, and
-clickable sources. The captured image can be shown as a **map overlay** at its true bounds, or
-opened **fullscreen** by clicking it; POIs appear as **category-coded pins**. Other touches:
-**🔗 Copy link** to a saved run, **🎲 Surprise** (jump to a random famous place and analyse),
-an open-water warning before remote captures, and the map restores your **last position**.
-**🕘 History** (top bar) opens past runs in a new tab — a **searchable, paginated** gallery
-with **imagery-tier filters** and a **map of every run** (click a pin to open it), served from a
-lightweight SQLite index. Imagery is **tiered and always-returns**:
-Sentinel-2 (10 m) up close, NASA GIBS MODIS for wide regional views, and a report even where no
-imagery exists. You can also start it with uvicorn:
+**📸 Snapshot** to analyse the framed view. The capture area is derived from what's visible —
+zoom in for a sharper, narrower view; zoom out for wider regional context.
+
+*Navigation & capture*
+
+- Arrows / `W A S D` pan, native + pinch zoom, `Enter` snapshots; the **⌨ help** button lists shortcuts.
+- **🎲 Surprise me** jumps to a random world-famous landmark; **🌍 Anywhere** drops on a random point on land.
+- An open-water warning appears before remote captures, and the map restores your **last position**.
+
+*Live analysis*
+
+- The snapshot runs as a background job with a **live per-stage progress** panel
+  (imagery → vision → enrichment → report) and a **✕ Cancel** button.
+- Imagery is **tiered and always-returns**: Sentinel-2 (10 m) up close, NASA GIBS MODIS for wide
+  regional views, and a report even where no imagery exists.
+
+*The report panel*
+
+- An imagery **provenance badge** (satellite tier + resolution, relative age, a *stale* warning past 90 days).
+- A **weather bar**, the AI reading, nearby POIs (click to fly in, then **Reset view**), recent
+  **news**, **history**, active **natural events**, and clickable sources.
+- The captured image can be shown as a **map overlay** at its true bounds or opened **fullscreen**
+  by clicking it; POIs appear as **category-coded pins**.
+- **🔗 Copy link** shares a saved run.
+
+*History*
+
+- **🕘 History** (top bar) opens past runs in a new tab — a **searchable, paginated** gallery with
+  **imagery-tier filters** and a **map of every run** (click a pin to open it), served from a
+  lightweight SQLite index.
+
+You can also start the GUI directly with uvicorn:
 
 ```bash
 uvicorn satviz.web.app:app --reload

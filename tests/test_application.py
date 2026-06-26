@@ -2,8 +2,8 @@ from datetime import date, timedelta
 
 from satviz.application.cache import ResultCache, viewport_key
 from satviz.application.mapping import (
-    is_stale, markers_from_report, pretty_kind, pretty_time, relative_age, run_data,
-    tier_label,
+    domain, is_stale, markers_from_report, pretty_kind, pretty_place, pretty_time,
+    relative_age, run_data, tier_label,
 )
 from satviz.application.service import AnalysisService
 
@@ -52,6 +52,32 @@ def test_pretty_kind_humanises_osm_values():
     assert pretty_kind("parking_entrance") == "Car Park Entrance"  # override
     assert pretty_kind("atm") == "ATM"                             # override
     assert pretty_kind("") == ""
+
+
+def test_domain_extracts_bare_host():
+    assert domain("https://www.ap.org/world/x") == "ap.org"
+    assert domain("http://sportingnews.com/a?b=1") == "sportingnews.com"
+    assert domain("bbc.com/news") == "bbc.com"
+    assert domain("") == ""
+
+
+def test_pretty_place_keeps_short_names_whole():
+    assert pretty_place("Yellowstone National Park, Wyoming, United States") == \
+        "Yellowstone National Park, Wyoming, United States"
+
+
+def test_pretty_place_trims_long_address_to_name_and_tail():
+    raw = ("Brooklyn Roasting Company Tokyo International Forum, 1, Marunouchi 3, "
+           "Marunouchi, Chiyoda, Tokyo, 100-0005, Japan")
+    assert pretty_place(raw) == \
+        "Brooklyn Roasting Company Tokyo International Forum, Tokyo, Japan"
+
+
+def test_pretty_place_drops_numeric_house_and_postcode():
+    raw = "2, Macquarie Street, Quay Quarter, Sydney, New South Wales, 2000, Australia"
+    out = pretty_place(raw)
+    assert "2000" not in out and out.startswith("Macquarie Street")
+    assert out.endswith("Australia")
 
 
 def test_markers_prettify_kind():

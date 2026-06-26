@@ -15,7 +15,7 @@
   {% set w = e.weather or {} %}
   <article class="report">
     <div class="report-head">
-      <h2>{{ loc.display_name }}</h2>
+      <h2 title="{{ loc.display_name }}">{{ loc.display_name|pretty_place }}</h2>
       {% if result.run_id %}
         <div class="report-actions">
           <button type="button" class="copy-link secondary" data-run-id="{{ result.run_id }}"
@@ -30,7 +30,6 @@
     <p class="meta">
       {{ "%.4f"|format(loc.latitude) }}, {{ "%.4f"|format(loc.longitude) }}
       · zoom {{ r.buffer }} m
-      {% if result.timing_ms %}· {{ result.timing_ms }} ms{% endif %}
     </p>
 
     {% if r.imagery_tier %}
@@ -78,7 +77,7 @@
         {% for f in v.features %}
           <li><span class="feat-name">{{ f.name }}</span>
             {% if f.confidence %}
-              {% set pct = (f.confidence * 100)|round %}
+              {% set pct = (f.confidence * 100)|round|int %}
               <span class="bar"><span class="bar-fill {{ 'hi' if pct >= 80 else 'mid' if pct >= 50 else 'lo' }}" style="width: {{ pct }}%"></span></span>
               <span class="muted">{{ pct }}%</span>
             {% endif %}
@@ -106,7 +105,7 @@
       {% if e.news_summary %}<p class="small">{{ e.news_summary }}</p>{% endif %}
       {% if e.news %}
         <ul class="weblinks">
-          {% for n in e.news[:5] %}<li><a href="{{ n.url }}" target="_blank" rel="noopener">{{ n.title or n.url }}</a></li>{% endfor %}
+          {% for n in e.news[:5] %}<li>{{ n.title or n.url }} <a class="src" href="{{ n.url }}" target="_blank" rel="noopener">{{ n.url|domain }}</a></li>{% endfor %}
         </ul>
       {% endif %}
     {% endif %}
@@ -115,8 +114,8 @@
       <h4>🌋 Active natural events nearby</h4>
       <ul class="events">
         {% for ev in e.events[:6] %}
-          <li><a href="{{ ev.url }}" target="_blank" rel="noopener">{{ ev.title }}</a>
-            <span class="muted">{{ ev.category }}{% if ev.date %} · {{ ev.date }}{% endif %}</span></li>
+          <li>{{ ev.title }}<span class="muted">{% if ev.category and ev.category[:4]|lower not in ev.title|lower %} · {{ ev.category }}{% endif %}{% if ev.date %} · {{ ev.date }}{% endif %}</span>
+            {% if ev.url %}<a class="src" href="{{ ev.url }}" target="_blank" rel="noopener">details ↗</a>{% endif %}</li>
         {% endfor %}
       </ul>
     {% endif %}
